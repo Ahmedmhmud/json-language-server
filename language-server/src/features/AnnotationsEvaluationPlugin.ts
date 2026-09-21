@@ -12,6 +12,11 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
   static readonly id = "annotations";
 
   private annotations: Map<string, Annotation[]> = new Map();
+  private incompleteLocations: Set<string>;
+
+  constructor(incompleteLocations: Set<string>) {
+    this.incompleteLocations = incompleteLocations;
+  }
 
   beforeSchema(_url: string, _instance: JsonNode, context: MatchingSchemaContext): void {
     context.pendingAnnotations = {};

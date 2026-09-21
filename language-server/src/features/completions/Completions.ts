@@ -2,6 +2,7 @@ import * as JsonPointer from "@hyperjump/json-pointer";
 import { JsonDocuments } from "../../services/JsonDocuments.ts";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
+import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
 import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscode-languageserver";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
