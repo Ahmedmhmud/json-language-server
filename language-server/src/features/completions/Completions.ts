@@ -2,6 +2,7 @@ import * as JsonPointer from "@hyperjump/json-pointer";
 import { JsonDocuments } from "../../services/JsonDocuments.ts";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
+import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
 import type { Server } from "../../services/Server.ts";
 import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscode-languageserver";
@@ -21,7 +22,7 @@ export class Completions {
     this.providers = providers;
 
     jsonDocuments.onDidCreate((jsonDocument) => {
-      jsonDocument.registerEvaluationPlugin(completionsEvaluationPluginId, () => {
+      const collectIncompleteLocations = () => {
         const incompleteLocations: Set<string> = new Set();
         jsonDocument.walkNodes(jsonDocument.findNodeAtPointer("")!, (node) => {
           if (node.type === "object") {
@@ -35,7 +36,15 @@ export class Completions {
             incompleteLocations.add(pointer);
           }
         });
-        return new CompletionsEvaluationPlugin(incompleteLocations);
+        return incompleteLocations;
+      };
+
+      jsonDocument.registerEvaluationPlugin(completionsEvaluationPluginId, () => {
+        return new CompletionsEvaluationPlugin(collectIncompleteLocations());
+      });
+
+      jsonDocument.registerEvaluationPlugin(AnnotationsEvaluationPlugin.id, () => {
+        return new AnnotationsEvaluationPlugin(collectIncompleteLocations());
       });
     });
 
