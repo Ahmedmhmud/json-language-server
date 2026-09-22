@@ -2,6 +2,7 @@ import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import * as JsonPointer from "@hyperjump/json-pointer";
 import * as Pact from "@hyperjump/pact";
+import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
 import type { CompletionsProvider } from "./Completions.ts";
 import type { CompletionItem, CompletionParams, Range } from "vscode-languageserver";
@@ -94,3 +95,23 @@ const typeSnippets: Record<string, { label: string; snippet: string }> = {
   array: { label: "[]", snippet: "[$0]" },
   object: { label: "{}", snippet: "{$0}" }
 };
+
+type DefaultSnippet = {
+  label?: string;
+  description?: string;
+  markdownDescription?: string;
+  body?: string | string[];
+  bodyText?: string;
+};
+
+function normalizeSnippetBody(snippet: DefaultSnippet): string {
+  if (typeof snippet.body === "string") {
+    return snippet.body;
+  }
+
+  if (Array.isArray(snippet.body)) {
+    return snippet.body.join("\n");
+  }
+
+  return snippet.bodyText ?? "";
+}
