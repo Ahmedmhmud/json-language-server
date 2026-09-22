@@ -14,7 +14,7 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
   private annotations: Map<string, Annotation[]> = new Map();
   private incompleteLocations: Set<string>;
 
-  constructor(incompleteLocations: Set<string>) {
+  constructor(incompleteLocations: Set<string> = new Set()) {
     this.incompleteLocations = incompleteLocations;
   }
 
@@ -26,8 +26,13 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
     const [keywordId, , keywordValue] = node;
 
     if (keyword.annotation) {
+      const annotationValue = keyword.annotation(keywordValue, instance, context);
       schemaContext.pendingAnnotations ??= {};
-      schemaContext.pendingAnnotations[keywordId] = keyword.annotation(keywordValue, instance, context);
+      schemaContext.pendingAnnotations[keywordId] = annotationValue;
+
+      if (this.incompleteLocations.has(instance.pointer)) {
+        this.recordAnnotation(instance.pointer, keywordId, annotationValue);
+      }
     }
   }
 
@@ -44,5 +49,11 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
 
   getAnnotations(instanceLocation: string): Annotation[] {
     return this.annotations.get(instanceLocation) ?? [];
+  }
+
+  private recordAnnotation(pointer: string, keywordId: string, value: unknown) {
+    const annotation = this.annotations.get(pointer) ?? [];
+    annotation.push({ [keywordId]: value });
+    this.annotations.set(pointer, annotation);
   }
 }
