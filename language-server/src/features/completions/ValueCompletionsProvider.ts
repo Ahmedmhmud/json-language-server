@@ -54,7 +54,9 @@ export class ValueCompletionsProvider implements CompletionsProvider {
 
     const defaultSnippets = (annotationsPlugin?.getAnnotations(instanceLocation) ?? [])
       .flatMap((annotation) => {
-        const value = annotation["https://microsoft.com/keyword/defaultSnippets"];
+        const value = annotation["https://microsoft.com/keyword/defaultSnippets"]
+          ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"]
+          ?? annotation["https://json-schema.org/keyword/defaultSnippets"];
         return Array.isArray(value) ? value as DefaultSnippet[] : value ? [value as DefaultSnippet] : [];
       });
 
