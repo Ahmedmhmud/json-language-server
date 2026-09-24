@@ -1,0 +1,295 @@
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { CompletionItem, CompletionItemKind, CompletionRequest, InsertTextFormat } from "vscode-languageserver";
+import { TestClient } from "../../test/TestClient.ts";
+
+describe("Value Completions", () => {
+  let client: TestClient;
+
+  beforeEach(async () => {
+    client = new TestClient();
+    await client.start();
+  });
+
+  afterEach(async () => {
+    await client.stop();
+  });
+
+  test("defaultSnippets with bodyText inserts the escaped string literal", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "defaultSnippets": [
+            {
+              "label": "Name",
+              "bodyText": "\\"name\\""
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": ""
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 14 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "Name",
+      kind: CompletionItemKind.Snippet,
+      insertTextFormat: InsertTextFormat.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 14 },
+          end: { line: 2, character: 14 }
+        },
+        newText: "\"name\""
+      }
+    }));
+  });
+
+  test("defaultSnippets with body inserts a plain snippet string", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "defaultSnippets": [
+            {
+              "label": "Object",
+              "body": "{\\n  \\"name\\": \\"$1\\"\\n}"
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": ""
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 14 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "Object",
+      kind: CompletionItemKind.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 14 },
+          end: { line: 2, character: 14 }
+        },
+        newText: "{\n  \"name\": \"$1\"\n}"
+      }
+    }));
+  });
+
+  test("defaultSnippets with body arrays join each line in order", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "defaultSnippets": [
+            {
+              "label": "Object array",
+              "body": [
+                "{",
+                "  \\"name\\": \\"$1\\"",
+                "}"
+              ]
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": ""
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 14 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "Object array",
+      kind: CompletionItemKind.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 14 },
+          end: { line: 2, character: 14 }
+        },
+        newText: "{\n  \"name\": \"$1\"\n}"
+      }
+    }));
+  });
+
+  test("defaultSnippets annotations from all anyOf branches are offered for an incomplete location", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+      "value": {
+        "anyOf": [
+        {
+          "type": "string",
+            "defaultSnippets": [
+            {
+                    "label": "FromBranchOne",
+                    "bodyText": "\\"one\\""
+                }
+                ]
+            },
+            {
+                "type": "string",
+                "defaultSnippets": [
+                {
+                    "label": "FromBranchTwo",
+                    "bodyText": "\\"two\\""
+                }
+                ]
+            }
+            ]
+        }
+        }
+    }`);
+
+    // "value" is missing, so we don't know yet which anyOf branch will apply.
+    // Both branches' defaultSnippets should be offered, same as buildCompletions
+    // unions anyOf branches instead of picking one.
+    await client.writeDocument("instance.json", `{
+        "$schema": "${fixtureSchemaUri}",
+        "value": 
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 12 }
+    }) as CompletionItem[];
+
+    const labels = completions.map((c) => c.label);
+
+    expect(labels).toContain("FromBranchOne");
+    expect(labels).toContain("FromBranchTwo");
+  });
+
+  test("defaultSnippets with a number body gets stringified without quotes", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "defaultSnippets": [
+            { "label": "Zero", "body": 0 }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "count": 
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 12 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "Zero",
+      kind: CompletionItemKind.Snippet,
+      textEdit: expect.objectContaining({ newText: "0" })
+    }));
+  });
+
+  test("defaultSnippets with a boolean body gets stringified without quotes", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "defaultSnippets": [
+            { "label": "True", "body": true }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "enabled": 
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 14 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "True",
+      kind: CompletionItemKind.Snippet,
+      textEdit: expect.objectContaining({ newText: "true" })
+    }));
+  });
+
+  test("defaultSnippets with a nested object body serializes recursively", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "defaultSnippets": [
+            {
+              "label": "Nested",
+              "body": { "user": { "name": "", "tags": ["a", "b"] } }
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": {}
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 13 }
+    }) as CompletionItem[];
+
+    expect(completions).toContainEqual(expect.objectContaining({
+      label: "Nested",
+      kind: CompletionItemKind.Snippet,
+      textEdit: expect.objectContaining({
+        newText: JSON.stringify({ user: { name: "", tags: ["a", "b"] } })
+      })
+    }));
+  });
+});

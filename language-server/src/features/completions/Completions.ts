@@ -7,8 +7,6 @@ import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 import type { Server } from "../../services/Server.ts";
 import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscode-languageserver";
 
-const completionsEvaluationPluginId = "completions";
-
 export type CompletionsProvider = {
   getCompletions(jsonDocument: JsonDocument, params: CompletionParams): Promise<CompletionItem[]>;
 };
@@ -39,7 +37,7 @@ export class Completions {
         return incompleteLocations;
       };
 
-      jsonDocument.registerEvaluationPlugin(completionsEvaluationPluginId, () => {
+      jsonDocument.registerEvaluationPlugin(CompletionsEvaluationPlugin.id, () => {
         return new CompletionsEvaluationPlugin(collectIncompleteLocations());
       });
 
