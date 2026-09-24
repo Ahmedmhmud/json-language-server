@@ -8,8 +8,6 @@ import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscod
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 import type { Server } from "../../services/Server.ts";
 
-const completionsEvaluationPluginId = "completions";
-
 export type CompletionsProvider = {
   getCompletions(jsonDocument: JsonDocument, params: CompletionParams): Promise<CompletionItem[]>;
 };
