@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
-import { CompletionItem, CompletionItemKind, CompletionRequest, InsertTextFormat } from "vscode-languageserver";
+import { CompletionItemKind, CompletionRequest, InsertTextFormat } from "vscode-languageserver";
 import { TestClient } from "../../test/TestClient.ts";
 
 describe("Value Completions", () => {
@@ -39,21 +39,21 @@ describe("Value Completions", () => {
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 14 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 16 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "Name",
       kind: CompletionItemKind.Snippet,
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
         range: {
-          start: { line: 2, character: 14 },
-          end: { line: 2, character: 14 }
+          start: { line: 2, character: 15 },
+          end: { line: 2, character: 17 }
         },
         newText: "\"name\""
       }
-    }));
+    });
   });
 
   test("defaultSnippets with body inserts a plain snippet string", async () => {
@@ -81,20 +81,21 @@ describe("Value Completions", () => {
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 14 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 16 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "Object",
       kind: CompletionItemKind.Snippet,
+      insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
         range: {
-          start: { line: 2, character: 14 },
-          end: { line: 2, character: 14 }
+          start: { line: 2, character: 15 },
+          end: { line: 2, character: 17 }
         },
         newText: "{\n  \"name\": \"$1\"\n}"
       }
-    }));
+    });
   });
 
   test("defaultSnippets with body arrays join each line in order", async () => {
@@ -126,20 +127,21 @@ describe("Value Completions", () => {
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 14 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 16 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "Object array",
       kind: CompletionItemKind.Snippet,
+      insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
         range: {
-          start: { line: 2, character: 14 },
-          end: { line: 2, character: 14 }
+          start: { line: 2, character: 15 },
+          end: { line: 2, character: 17 }
         },
         newText: "{\n  \"name\": \"$1\"\n}"
       }
-    }));
+    });
   });
 
   test("defaultSnippets annotations from all anyOf branches are offered for an incomplete location", async () => {
@@ -147,49 +149,47 @@ describe("Value Completions", () => {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
-      "value": {
-        "anyOf": [
-        {
-          "type": "string",
-            "defaultSnippets": [
+        "value": {
+          "anyOf": [
             {
-                    "label": "FromBranchOne",
-                    "bodyText": "\\"one\\""
+              "type": "string",
+              "defaultSnippets": [
+                {
+                  "label": "FromBranchOne",
+                  "bodyText": "\\"one\\""
                 }
-                ]
+              ]
             },
             {
-                "type": "string",
-                "defaultSnippets": [
+              "type": "string",
+              "defaultSnippets": [
                 {
-                    "label": "FromBranchTwo",
-                    "bodyText": "\\"two\\""
+                  "label": "FromBranchTwo",
+                  "bodyText": "\\"two\\""
                 }
-                ]
+              ]
             }
-            ]
+          ]
         }
-        }
+      }
     }`);
 
     // "value" is missing, so we don't know yet which anyOf branch will apply.
     // Both branches' defaultSnippets should be offered, same as buildCompletions
     // unions anyOf branches instead of picking one.
     await client.writeDocument("instance.json", `{
-        "$schema": "${fixtureSchemaUri}",
-        "value": 
+      "$schema": "${fixtureSchemaUri}",
+      "value":
     }`);
     const uri = await client.openDocument("instance.json");
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 12 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 14 }
+    });
 
-    const labels = completions.map((c) => c.label);
-
-    expect(labels).toContain("FromBranchOne");
-    expect(labels).toContain("FromBranchTwo");
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromBranchOne" }));
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromBranchTwo" }));
   });
 
   test("defaultSnippets with a number body gets stringified without quotes", async () => {
@@ -208,20 +208,27 @@ describe("Value Completions", () => {
 
     await client.writeDocument("instance.json", `{
       "$schema": "${fixtureSchemaUri}",
-      "count": 
+      "count":
     }`);
     const uri = await client.openDocument("instance.json");
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 12 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 14 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "Zero",
       kind: CompletionItemKind.Snippet,
-      textEdit: expect.objectContaining({ newText: "0" })
-    }));
+      insertTextFormat: InsertTextFormat.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 14 },
+          end: { line: 2, character: 14 }
+        },
+        newText: "0"
+      }
+    });
   });
 
   test("defaultSnippets with a boolean body gets stringified without quotes", async () => {
@@ -240,20 +247,27 @@ describe("Value Completions", () => {
 
     await client.writeDocument("instance.json", `{
       "$schema": "${fixtureSchemaUri}",
-      "enabled": 
+      "enabled":
     }`);
     const uri = await client.openDocument("instance.json");
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 14 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 16 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "True",
       kind: CompletionItemKind.Snippet,
-      textEdit: expect.objectContaining({ newText: "true" })
-    }));
+      insertTextFormat: InsertTextFormat.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 16 },
+          end: { line: 2, character: 16 }
+        },
+        newText: "true"
+      }
+    });
   });
 
   test("defaultSnippets with a nested object body serializes recursively", async () => {
@@ -281,15 +295,20 @@ describe("Value Completions", () => {
 
     const completions = await client.sendRequest(CompletionRequest.type, {
       textDocument: { uri },
-      position: { line: 2, character: 13 }
-    }) as CompletionItem[];
+      position: { line: 2, character: 16 }
+    });
 
-    expect(completions).toContainEqual(expect.objectContaining({
+    expect(completions).toContainEqual({
       label: "Nested",
       kind: CompletionItemKind.Snippet,
-      textEdit: expect.objectContaining({
-        newText: JSON.stringify({ user: { name: "", tags: ["a", "b"] } })
-      })
-    }));
+      insertTextFormat: InsertTextFormat.Snippet,
+      textEdit: {
+        range: {
+          start: { line: 2, character: 15 },
+          end: { line: 2, character: 17 }
+        },
+        newText: "{\"user\":{\"name\":\"\",\"tags\":[\"a\",\"b\"]}}"
+      }
+    });
   });
 });
