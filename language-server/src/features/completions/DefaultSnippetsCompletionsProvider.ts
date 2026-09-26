@@ -19,7 +19,7 @@ export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
   async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
     const node = jsonDocument.findNodeAtPosition({ ...params.position, character: params.position.character - 1 })!;
 
-    if (node.parent?.type === "property" && node.parent.colonOffset === undefined) {
+    if (node.parent?.type === "property" && node.parent.children?.[0] === node) {
       return [];
     }
 
