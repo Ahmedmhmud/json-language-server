@@ -144,6 +144,39 @@ describe("Value Completions", () => {
     });
   });
 
+  test("no completions are offered when the cursor is inside a property key", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "defaultSnippets": [
+            {
+              "label": "Name",
+              "bodyText": "\\"name\\""
+            }
+          ]
+        }
+      }
+    }`);
+
+    // The property already has a value, so a snippet offered here would carry a
+    // textEdit range covering the key and clobber it.
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": ""
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 9 }
+    });
+
+    expect(completions).toEqual([]);
+  });
+
   test("defaultSnippets annotations from all anyOf branches are offered for an incomplete location", async () => {
     const fixtureSchemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",

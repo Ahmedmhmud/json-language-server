@@ -21,7 +21,7 @@ export class ValueCompletionsProvider implements CompletionsProvider {
       return [];
     }
 
-    if (node.parent?.type === "property" && node.parent.colonOffset === undefined) {
+    if (node.parent?.type === "property" && node.parent.children?.[0] === node) {
       return [];
     }
 
