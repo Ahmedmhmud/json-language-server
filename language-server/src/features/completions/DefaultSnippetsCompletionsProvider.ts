@@ -54,29 +54,26 @@ export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
         range = jsonDocument.rangeAt(node.offset, node.offset + node.length);
     }
 
-    const annotationsPlugin = await jsonDocument.getEvaluationPlugin<AnnotationsEvaluationPlugin>(
-      AnnotationsEvaluationPlugin.id
-    );
-
-    const defaultSnippets = (annotationsPlugin?.getAnnotations(instanceLocation) ?? [])
-      .flatMap((annotation) => {
-        const value = annotation["https://microsoft.com/keyword/defaultSnippets"]
-          ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"];
-        return value as DefaultSnippet[] ?? [];
-      });
+    const annotationsPlugin = await jsonDocument.getEvaluationPlugin<AnnotationsEvaluationPlugin>(AnnotationsEvaluationPlugin.id);
 
     const completions: CompletionItem[] = [];
-    for (const snippet of defaultSnippets) {
-      completions.push({
-        label: snippet.label ?? "snippet",
-        kind: CompletionItemKind.Snippet,
-        detail: snippet.description,
-        insertTextFormat: InsertTextFormat.Snippet,
-        textEdit: {
-          range,
-          newText: normalizeSnippetBody(snippet)
-        }
-      });
+    for (const annotation of annotationsPlugin?.getAnnotations(instanceLocation) ?? []) {
+      const defaultSnippets = (annotation["https://microsoft.com/keyword/defaultSnippets"]
+        ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"]
+        ?? []) as DefaultSnippet[];
+
+      for (const snippet of defaultSnippets) {
+        completions.push({
+          label: snippet.label ?? "snippet",
+          kind: CompletionItemKind.Snippet,
+          detail: snippet.description,
+          insertTextFormat: InsertTextFormat.Snippet,
+          textEdit: {
+            range,
+            newText: normalizeSnippetBody(snippet)
+          }
+        });
+      }
     }
     return completions;
   }
