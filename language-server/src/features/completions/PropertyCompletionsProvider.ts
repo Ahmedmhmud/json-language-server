@@ -1,5 +1,6 @@
 import { CompletionItemKind } from "vscode-languageserver";
 import * as Pact from "@hyperjump/pact";
+import { Completions } from "./Completions.ts";
 
 import type { CompletionItem, CompletionParams } from "vscode-languageserver";
 import type { CompletionsProvider } from "./Completions.ts";
@@ -15,7 +16,7 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
   }
 
   async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
-    const node = jsonDocument.findNodeAtPosition({ ...params.position, character: params.position.character - 1 });
+    const node = Completions.getNodeAtCursor(jsonDocument, params);
     if (!node) {
       return [];
     }

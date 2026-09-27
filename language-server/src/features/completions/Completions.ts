@@ -1,4 +1,5 @@
 import * as JsonPointer from "@hyperjump/json-pointer";
+import * as Pact from "@hyperjump/pact";
 import { JsonDocuments } from "../../services/JsonDocuments.ts";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
@@ -75,5 +76,51 @@ export class Completions {
 
       return completionItems;
     });
+  }
+
+  static getNodeAtCursor(jsonDocument: JsonDocument, params: CompletionParams) {
+    return jsonDocument.findNodeAtPosition({ ...params.position, character: params.position.character - 1 });
+  }
+
+  static findInstanceLocationAndRange(jsonDocument: JsonDocument, params: CompletionParams): { instanceLocation: string; range: Range } | undefined {
+    const node = Completions.getNodeAtCursor(jsonDocument, params);
+    if (!node) {
+      return undefined;
+    }
+    if (node.parent?.type === "property" && node.parent.children?.[0] === node) {
+      return undefined;
+    }
+
+    if (node.type === "property" && node.colonOffset === undefined) {
+      return undefined;
+    }
+
+    const cursorOffset = jsonDocument.offsetAt(params.position);
+
+    let instanceLocation: string;
+    let range: Range;
+
+    switch (node.type) {
+      case "property":
+        instanceLocation = jsonDocument.getPointerForNode(node);
+        range = { start: jsonDocument.positionAt(node.colonOffset! + 1), end: params.position };
+        break;
+
+      case "array":
+        const index = Pact.pipe(
+          node.children!,
+          Pact.takeWhile((itemNode) => cursorOffset >= itemNode.offset),
+          Pact.count
+        );
+
+        instanceLocation = JsonPointer.append(`${index}`, jsonDocument.getPointerForNode(node));
+        range = { start: params.position, end: params.position };
+        break;
+
+      default:
+        instanceLocation = jsonDocument.getPointerForNode(node);
+        range = jsonDocument.rangeAt(node.offset, node.offset + node.length);
+    }
+    return { instanceLocation, range };
   }
 }

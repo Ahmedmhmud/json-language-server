@@ -1,10 +1,9 @@
 import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
-import * as JsonPointer from "@hyperjump/json-pointer";
-import * as Pact from "@hyperjump/pact";
+import { Completions } from "./Completions.ts";
 
 import type { CompletionsProvider } from "./Completions.ts";
-import type { CompletionItem, CompletionParams, Range } from "vscode-languageserver";
+import type { CompletionItem, CompletionParams } from "vscode-languageserver";
 import type { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
@@ -16,46 +15,14 @@ export class ValueCompletionsProvider implements CompletionsProvider {
   }
 
   async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
-    const node = jsonDocument.findNodeAtPosition({ ...params.position, character: params.position.character - 1 });
-    if (!node) {
+    const location = Completions.findInstanceLocationAndRange(jsonDocument, params);
+    if (!location) {
       return [];
     }
 
-    if (node.parent?.type === "property" && node.parent.children?.[0] === node) {
-      return [];
-    }
-
-    if (node.type === "property" && node.colonOffset === undefined) {
-      return [];
-    }
+    const { instanceLocation, range } = location;
 
     const cursorOffset = jsonDocument.offsetAt(params.position);
-
-    let instanceLocation: string;
-    let range: Range;
-
-    switch (node.type) {
-      case "property":
-        instanceLocation = jsonDocument.getPointerForNode(node);
-        range = { start: jsonDocument.positionAt(node.colonOffset! + 1), end: params.position };
-        break;
-
-      case "array":
-        const index = Pact.pipe(
-          node.children!,
-          Pact.takeWhile((itemNode) => cursorOffset >= itemNode.offset),
-          Pact.count
-        );
-
-        instanceLocation = JsonPointer.append(`${index}`, jsonDocument.getPointerForNode(node));
-        range = { start: params.position, end: params.position };
-        break;
-
-      default:
-        instanceLocation = jsonDocument.getPointerForNode(node);
-        range = jsonDocument.rangeAt(node.offset, node.offset + node.length);
-    }
-
     const completions: CompletionItem[] = [];
 
     try {
