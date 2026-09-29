@@ -186,7 +186,10 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
 
 function splitPointer(pointer: string): [string, string] {
   const lastSlash = pointer.lastIndexOf("/");
-  return [pointer.slice(0, lastSlash), pointer.slice(lastSlash + 1)];
+  const propertyName = pointer.slice(lastSlash + 1)
+    .replace(/~1/g, "/")
+    .replace(/~0/g, "~");
+  return [pointer.slice(0, lastSlash), propertyName];
 }
 
 function crossMerge(a: Annotation[], b: Annotation[]): Annotation[] {

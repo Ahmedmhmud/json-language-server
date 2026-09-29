@@ -225,6 +225,39 @@ describe("Value Completions", () => {
     expect(completions).toContainEqual(expect.objectContaining({ label: "FromBranchTwo" }));
   });
 
+  test("additionalProperties defaultSnippets are not offered for a declared property whose name needs escaping", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "a/b": {
+          "defaultSnippets": [
+            { "label": "FromProperties", "bodyText": "\\"properties\\"" }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "defaultSnippets": [
+          { "label": "FromAdditionalProperties", "bodyText": "\\"additional\\"" }
+        ]
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "a/b":
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 12 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromProperties" }));
+    expect(completions).not.toContainEqual(expect.objectContaining({ label: "FromAdditionalProperties" }));
+  });
+
   test("defaultSnippets with a number body gets stringified without quotes", async () => {
     const fixtureSchemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",
