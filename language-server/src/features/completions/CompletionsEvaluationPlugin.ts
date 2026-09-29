@@ -53,6 +53,10 @@ export class CompletionsEvaluationPlugin implements EvaluationPlugin<Completions
           const schemaUri = properties[propertyName];
           const completions = this.buildCompletions(schemaUri, schemaContext);
           schemaContext.completions![pointer] = schemaContext.completions![pointer]?.intersect(completions) ?? completions;
+
+          if (this.incompleteLocations.has(pointer)) {
+            context.evaluatedProperties?.add(propertyName);
+          }
         }
         break;
       }
