@@ -38,20 +38,12 @@ export const buildServer = (connection: Connection): Server => {
     new SchemaValidationDiagnosticsProvider(jsonSchema)
   ]);
 
-<<<<<<< HEAD
   new Formatting(server, jsonDocuments);
   new Hover(server, jsonDocuments, jsonSchema);
   new Completions(server, jsonDocuments, jsonSchema, [
     new PropertyCompletionsProvider(jsonSchema),
-    new ValueCompletionsProvider(jsonSchema)
-=======
-  new Formatting(server, documents);
-  new Hover(server, documents);
-  new Completions(server, documents, [
-    new PropertyCompletionsProvider(),
-    new ValueCompletionsProvider(),
-    new DefaultSnippetsCompletionsProvider()
->>>>>>> 5fcd666 (using beforeKeyword traversal and splitting DefaultSnippets logic)
+    new ValueCompletionsProvider(jsonSchema),
+    new DefaultSnippetsCompletionsProvider(jsonSchema)
   ]);
   new FoldingRanges(server, jsonDocuments);
   new DocumentSymbols(server, jsonDocuments);

@@ -1,10 +1,10 @@
 import { CompletionItemKind } from "vscode-languageserver";
 import * as Pact from "@hyperjump/pact";
 import { Completions } from "./Completions.ts";
+import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 
 import type { CompletionItem, CompletionParams } from "vscode-languageserver";
 import type { CompletionsProvider } from "./Completions.ts";
-import type { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 import type { JsonDocument } from "../../models/JsonDocument.ts";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
@@ -39,7 +39,7 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
 
     try {
       const result = await this.jsonSchema.validate(jsonDocument);
-      const plugin = result.plugins.get("completions") as CompletionsEvaluationPlugin;
+      const plugin = result.plugins.get(CompletionsEvaluationPlugin.id) as CompletionsEvaluationPlugin;
 
       for (const propertyName of plugin.getPropertyCompletions(instanceLocation)) {
         if (existingPropertyNames.has(propertyName)) {

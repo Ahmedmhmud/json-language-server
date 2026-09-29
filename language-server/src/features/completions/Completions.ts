@@ -5,7 +5,7 @@ import { JsonDocument } from "../../models/JsonDocument.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
-import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscode-languageserver";
+import type { CompletionItem, CompletionParams, ServerCapabilities, Range } from "vscode-languageserver";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 import type { Server } from "../../services/Server.ts";
 
@@ -21,11 +21,11 @@ export class Completions {
     this.jsonDocuments = jsonDocuments;
     this.providers = providers;
 
-    jsonSchema.registerPlugin(completionsEvaluationPluginId, (jsonDocument) => {
+    const collectIncompleteLocations = (jsonDocument: JsonDocument) => {
       const incompleteLocations: Set<string> = new Set();
       const ast = jsonDocument.findNodeAtPointer("");
       if (!ast) {
-        return new CompletionsEvaluationPlugin(incompleteLocations);
+        return incompleteLocations;
       }
 
       jsonDocument.walkNodes(ast, (node) => {
@@ -40,7 +40,15 @@ export class Completions {
           incompleteLocations.add(pointer);
         }
       });
-      return new CompletionsEvaluationPlugin(incompleteLocations);
+      return incompleteLocations;
+    };
+
+    jsonSchema.registerPlugin(CompletionsEvaluationPlugin.id, (jsonDocument) => {
+      return new CompletionsEvaluationPlugin(collectIncompleteLocations(jsonDocument));
+    });
+
+    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, (jsonDocument) => {
+      return new AnnotationsEvaluationPlugin(collectIncompleteLocations(jsonDocument));
     });
 
     server.onInitialize(() => {

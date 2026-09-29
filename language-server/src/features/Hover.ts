@@ -18,8 +18,6 @@ export class Hover {
       };
     });
 
-    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, () => new AnnotationsEvaluationPlugin());
-
     server.onHover(async (params) => {
       const jsonDocument = jsonDocuments.get(params.textDocument.uri)!;
 

@@ -5,6 +5,7 @@ import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
 import type { CompletionsProvider } from "./Completions.ts";
 import type { CompletionItem, CompletionParams } from "vscode-languageserver";
+import type { JsonSchema } from "../../services/JsonSchema.ts";
 
 type DefaultSnippet = {
   label?: string;
@@ -15,6 +16,12 @@ type DefaultSnippet = {
 };
 
 export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
+  private jsonSchema: JsonSchema;
+
+  constructor(jsonSchema: JsonSchema) {
+    this.jsonSchema = jsonSchema;
+  }
+
   async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
     const location = Completions.findInstanceLocationAndRange(jsonDocument, params);
     if (!location) {
@@ -22,27 +29,32 @@ export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
     }
 
     const { instanceLocation, range } = location;
-
-    const annotationsPlugin = await jsonDocument.getEvaluationPlugin<AnnotationsEvaluationPlugin>(AnnotationsEvaluationPlugin.id);
-
     const completions: CompletionItem[] = [];
-    for (const annotation of annotationsPlugin?.getAnnotations(instanceLocation) ?? []) {
-      const defaultSnippets = (annotation["https://microsoft.com/keyword/defaultSnippets"]
-        ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"]
-        ?? []) as DefaultSnippet[];
 
-      for (const snippet of defaultSnippets) {
-        completions.push({
-          label: snippet.label ?? "snippet",
-          kind: CompletionItemKind.Snippet,
-          detail: snippet.description,
-          insertTextFormat: InsertTextFormat.Snippet,
-          textEdit: {
-            range,
-            newText: normalizeSnippetBody(snippet)
-          }
-        });
+    try {
+      const result = await this.jsonSchema.validate(jsonDocument);
+      const annotationsPlugin = result.plugins.get(AnnotationsEvaluationPlugin.id) as AnnotationsEvaluationPlugin;
+
+      for (const annotation of annotationsPlugin?.getAnnotations(instanceLocation) ?? []) {
+        const defaultSnippets = (annotation["https://microsoft.com/keyword/defaultSnippets"]
+          ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"]
+          ?? []) as DefaultSnippet[];
+
+        for (const snippet of defaultSnippets) {
+          completions.push({
+            label: snippet.label ?? "snippet",
+            kind: CompletionItemKind.Snippet,
+            detail: snippet.description,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: {
+              range,
+              newText: normalizeSnippetBody(snippet)
+            }
+          });
+        }
       }
+    } catch {
+      // No completions on schema error
     }
     return completions;
   }

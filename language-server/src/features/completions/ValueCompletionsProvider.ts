@@ -1,10 +1,10 @@
 import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { Completions } from "./Completions.ts";
+import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 
 import type { CompletionsProvider } from "./Completions.ts";
 import type { CompletionItem, CompletionParams } from "vscode-languageserver";
-import type { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
 export class ValueCompletionsProvider implements CompletionsProvider {
@@ -27,7 +27,7 @@ export class ValueCompletionsProvider implements CompletionsProvider {
 
     try {
       const result = await this.jsonSchema.validate(jsonDocument);
-      const plugin = result.plugins.get("completions") as CompletionsEvaluationPlugin;
+      const plugin = result.plugins.get(CompletionsEvaluationPlugin.id) as CompletionsEvaluationPlugin;
 
       for (const completion of plugin.getCompletions(instanceLocation)) {
         const label = completion.kind === "value" ? completion.value : typeSnippets[completion.type].label;

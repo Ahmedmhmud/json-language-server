@@ -32,8 +32,6 @@ export class DocumentColors {
       };
     });
 
-    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, () => new AnnotationsEvaluationPlugin());
-
     server.onDocumentColor(async (params) => {
       const jsonDocument = this.jsonDocuments.get(params.textDocument.uri);
       const ast = jsonDocument?.findNodeAtPointer("");
