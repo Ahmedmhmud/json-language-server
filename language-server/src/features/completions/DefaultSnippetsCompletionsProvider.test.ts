@@ -258,6 +258,204 @@ describe("Value Completions", () => {
     expect(completions).not.toContainEqual(expect.objectContaining({ label: "FromAdditionalProperties" }));
   });
 
+  test("unevaluatedProperties defaultSnippets are offered for an incomplete location", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "unevaluatedProperties": {
+        "defaultSnippets": [
+          { "label": "FromUnevaluatedProperties", "bodyText": "\\"unevaluated\\"" }
+        ]
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "foo":
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 12 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromUnevaluatedProperties" }));
+  });
+
+  test("unevaluatedProperties defaultSnippets are not offered for an incomplete location evaluated by properties", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "allOf": [
+        {
+          "properties": {
+            "foo": {
+              "defaultSnippets": [
+                { "label": "FromProperties", "bodyText": "\\"properties\\"" }
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": {
+        "defaultSnippets": [
+          { "label": "FromUnevaluatedProperties", "bodyText": "\\"unevaluated\\"" }
+        ]
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "foo":
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 12 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromProperties" }));
+    expect(completions).not.toContainEqual(expect.objectContaining({ label: "FromUnevaluatedProperties" }));
+  });
+
+  test("draft-07 items defaultSnippets are offered for an incomplete array item", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "items": {
+            "defaultSnippets": [
+              { "label": "FromItems", "bodyText": "\\"item\\"" }
+            ]
+          }
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "list": []
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 15 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromItems" }));
+  });
+
+  test("draft-07 tuple items defaultSnippets are offered for an incomplete array item", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "items": [
+            {
+              "defaultSnippets": [
+                { "label": "FromFirstItem", "bodyText": "\\"first\\"" }
+              ]
+            },
+            {
+              "defaultSnippets": [
+                { "label": "FromSecondItem", "bodyText": "\\"second\\"" }
+              ]
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "list": []
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 15 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromFirstItem" }));
+    expect(completions).not.toContainEqual(expect.objectContaining({ label: "FromSecondItem" }));
+  });
+
+  test("unevaluatedItems defaultSnippets are offered for an incomplete array item", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "unevaluatedItems": {
+            "defaultSnippets": [
+              { "label": "FromUnevaluatedItems", "bodyText": "\\"item\\"" }
+            ]
+          }
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "list": []
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 15 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromUnevaluatedItems" }));
+  });
+
+  test("unevaluatedItems defaultSnippets are not offered for an incomplete array item evaluated by prefixItems", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "defaultSnippets": [
+                { "label": "FromPrefixItems", "bodyText": "\\"prefix\\"" }
+              ]
+            }
+          ],
+          "unevaluatedItems": {
+            "defaultSnippets": [
+              { "label": "FromUnevaluatedItems", "bodyText": "\\"item\\"" }
+            ]
+          }
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "list": []
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 2, character: 15 }
+    });
+
+    expect(completions).toContainEqual(expect.objectContaining({ label: "FromPrefixItems" }));
+    expect(completions).not.toContainEqual(expect.objectContaining({ label: "FromUnevaluatedItems" }));
+  });
+
   test("defaultSnippets with a number body gets stringified without quotes", async () => {
     const fixtureSchemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",

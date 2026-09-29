@@ -10,6 +10,10 @@ type Annotation = Record<string, unknown>;
 type MatchingSchemaContext = ValidationContext & {
   pendingAnnotations?: Annotation;
   dynamicAnchors?: Record<string, string>;
+  evaluatedProperties?: Set<string>;
+  schemaEvaluatedProperties?: Set<string>;
+  evaluatedItems?: Set<number>;
+  schemaEvaluatedItems?: Set<number>;
 };
 
 export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
@@ -26,7 +30,7 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
     context.pendingAnnotations = {};
   }
 
-  beforeKeyword(keywordNode: Node<unknown>, instance: JsonNode, _context: MatchingSchemaContext, schemaContext: MatchingSchemaContext): void {
+  beforeKeyword(keywordNode: Node<unknown>, instance: JsonNode, context: MatchingSchemaContext, schemaContext: MatchingSchemaContext): void {
     const [keywordId, , keywordValue] = keywordNode;
 
     switch (keywordId) {
@@ -36,6 +40,7 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const pointer = JsonPointer.append(propertyName, instance.pointer);
           if (this.incompleteLocations.has(pointer)) {
             this.recordBuiltAnnotation(pointer, properties[propertyName], schemaContext);
+            context.evaluatedProperties?.add(propertyName);
           }
         }
         break;
@@ -52,6 +57,7 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           for (const [pattern, schemaUri] of patternProperties) {
             if (pattern.test(propertyName)) {
               this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
+              context.evaluatedProperties?.add(propertyName);
             }
           }
         }
@@ -64,6 +70,19 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const [parentPointer, propertyName] = splitPointer(pointer);
           if (parentPointer === instance.pointer && !isDeclaredProperty.test(propertyName)) {
             this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
+            context.evaluatedProperties?.add(propertyName);
+          }
+        }
+        break;
+      }
+
+      case "https://json-schema.org/keyword/unevaluatedProperties": {
+        const schemaUri = keywordValue as string;
+        for (const pointer of this.incompleteLocations) {
+          const [parentPointer, propertyName] = splitPointer(pointer);
+          if (parentPointer === instance.pointer && !context.schemaEvaluatedProperties!.has(propertyName)) {
+            this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
+            context.evaluatedProperties?.add(propertyName);
           }
         }
         break;
@@ -75,6 +94,7 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const pointer = JsonPointer.append(`${itemIndex}`, instance.pointer);
           if (this.incompleteLocations.has(pointer)) {
             this.recordBuiltAnnotation(pointer, prefixItems[itemIndex], schemaContext);
+            context.evaluatedItems?.add(itemIndex);
           }
         }
         break;
@@ -88,6 +108,43 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const itemIndex = Number(indexStr);
           if (parentPointer === instance.pointer && itemIndex >= numberOfPrefixItems) {
             this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
+            context.evaluatedItems?.add(itemIndex);
+          }
+        }
+        break;
+      }
+
+      case "https://json-schema.org/keyword/draft-04/items": {
+        if (typeof keywordValue === "string") {
+          for (const pointer of this.incompleteLocations) {
+            const [parentPointer, indexStr] = splitPointer(pointer);
+            const itemIndex = Number(indexStr);
+            if (parentPointer === instance.pointer && Number.isInteger(itemIndex)) {
+              this.recordBuiltAnnotation(pointer, keywordValue, schemaContext);
+              context.evaluatedItems?.add(itemIndex);
+            }
+          }
+        } else {
+          const items = keywordValue as string[];
+          for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+            const pointer = JsonPointer.append(`${itemIndex}`, instance.pointer);
+            if (this.incompleteLocations.has(pointer)) {
+              this.recordBuiltAnnotation(pointer, items[itemIndex], schemaContext);
+              context.evaluatedItems?.add(itemIndex);
+            }
+          }
+        }
+        break;
+      }
+
+      case "https://json-schema.org/keyword/unevaluatedItems": {
+        const schemaUri = keywordValue as string;
+        for (const pointer of this.incompleteLocations) {
+          const [parentPointer, indexStr] = splitPointer(pointer);
+          const itemIndex = Number(indexStr);
+          if (parentPointer === instance.pointer && Number.isInteger(itemIndex) && !context.schemaEvaluatedItems!.has(itemIndex)) {
+            this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
+            context.evaluatedItems?.add(itemIndex);
           }
         }
         break;
