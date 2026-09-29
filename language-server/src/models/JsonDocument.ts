@@ -125,6 +125,10 @@ export class JsonDocument implements TextDocument {
     return this.getPointerForNode(parent);
   }
 
+  isPropertyKey(node: jsonc.Node) {
+    return node.parent?.type === "property" && node.parent.children?.[0] === node;
+  }
+
   findNodeAtPosition(position: Position) {
     if (!this.ast) {
       return;

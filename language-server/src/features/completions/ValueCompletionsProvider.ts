@@ -1,10 +1,9 @@
 import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
-import { Completions } from "./Completions.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 
-import type { CompletionsProvider } from "./Completions.ts";
-import type { CompletionItem, CompletionParams } from "vscode-languageserver";
+import type { CompletionContext, CompletionsProvider } from "./Completions.ts";
+import type { CompletionItem } from "vscode-languageserver";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
 export class ValueCompletionsProvider implements CompletionsProvider {
@@ -14,22 +13,19 @@ export class ValueCompletionsProvider implements CompletionsProvider {
     this.jsonSchema = jsonSchema;
   }
 
-  async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
-    const location = Completions.findInstanceLocationAndRange(jsonDocument, params);
-    if (!location) {
+  async getCompletions(jsonDocument: JsonDocument, context: CompletionContext) {
+    if (jsonDocument.isPropertyKey(context.node)) {
       return [];
     }
 
-    const { instanceLocation, range } = location;
-
-    const cursorOffset = jsonDocument.offsetAt(params.position);
+    const cursorOffset = jsonDocument.offsetAt(context.position);
     const completions: CompletionItem[] = [];
 
     try {
       const result = await this.jsonSchema.validate(jsonDocument);
       const plugin = result.plugins.get(CompletionsEvaluationPlugin.id) as CompletionsEvaluationPlugin;
 
-      for (const completion of plugin.getCompletions(instanceLocation)) {
+      for (const completion of plugin.getCompletions(context.instanceLocation)) {
         const label = completion.kind === "value" ? completion.value : typeSnippets[completion.type].label;
         const snippet = completion.kind === "value" ? completion.value : typeSnippets[completion.type].snippet;
 
@@ -41,7 +37,7 @@ export class ValueCompletionsProvider implements CompletionsProvider {
           },
           insertTextFormat: InsertTextFormat.Snippet,
           textEdit: {
-            range: range,
+            range: context.range,
             newText: /^[:,]$/.test(jsonDocument.getText()[cursorOffset - 1]) ? ` ${snippet}` : snippet
           }
         });

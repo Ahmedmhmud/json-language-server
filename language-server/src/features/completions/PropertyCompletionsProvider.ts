@@ -1,10 +1,9 @@
 import { CompletionItemKind } from "vscode-languageserver";
 import * as Pact from "@hyperjump/pact";
-import { Completions } from "./Completions.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
 
-import type { CompletionItem, CompletionParams } from "vscode-languageserver";
-import type { CompletionsProvider } from "./Completions.ts";
+import type { CompletionItem } from "vscode-languageserver";
+import type { CompletionContext, CompletionsProvider } from "./Completions.ts";
 import type { JsonDocument } from "../../models/JsonDocument.ts";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
@@ -15,17 +14,12 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
     this.jsonSchema = jsonSchema;
   }
 
-  async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
-    const node = Completions.getNodeAtCursor(jsonDocument, params);
-    if (!node) {
+  async getCompletions(jsonDocument: JsonDocument, context: CompletionContext) {
+    if (!jsonDocument.isPropertyKey(context.node) || context.node.parent!.colonOffset !== undefined) {
       return [];
     }
 
-    if (node.parent?.type !== "property" || node.parent.children?.[0] !== node || node.parent.colonOffset !== undefined) {
-      return [];
-    }
-
-    const objectNode = node.parent.parent!;
+    const objectNode = context.node.parent!.parent!;
     const existingPropertyNames = Pact.pipe(
       objectNode.children!,
       Pact.map((propertyNode) => propertyNode.children![0].value),
@@ -33,7 +27,6 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
     );
 
     const instanceLocation = jsonDocument.getPointerForNode(objectNode);
-    const range = jsonDocument.rangeAt(node.offset, node.offset + node.length);
 
     const completionItems: CompletionItem[] = [];
 
@@ -54,7 +47,7 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
           },
           filterText: JSON.stringify(propertyName),
           textEdit: {
-            range: range,
+            range: context.range,
             newText: `"${propertyName}": `
           },
           command: { title: "Suggest", command: "editor.action.triggerSuggest" }

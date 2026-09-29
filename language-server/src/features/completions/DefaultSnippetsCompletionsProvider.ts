@@ -1,10 +1,9 @@
 import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
-import { Completions } from "./Completions.ts";
 import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
-import type { CompletionsProvider } from "./Completions.ts";
-import type { CompletionItem, CompletionParams } from "vscode-languageserver";
+import type { CompletionContext, CompletionsProvider } from "./Completions.ts";
+import type { CompletionItem } from "vscode-languageserver";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 
 type DefaultSnippet = {
@@ -22,20 +21,17 @@ export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
     this.jsonSchema = jsonSchema;
   }
 
-  async getCompletions(jsonDocument: JsonDocument, params: CompletionParams) {
-    const location = Completions.findInstanceLocationAndRange(jsonDocument, params);
-    if (!location) {
+  async getCompletions(jsonDocument: JsonDocument, context: CompletionContext) {
+    if (jsonDocument.isPropertyKey(context.node)) {
       return [];
     }
-
-    const { instanceLocation, range } = location;
     const completions: CompletionItem[] = [];
 
     try {
       const result = await this.jsonSchema.validate(jsonDocument);
       const annotationsPlugin = result.plugins.get(AnnotationsEvaluationPlugin.id) as AnnotationsEvaluationPlugin;
 
-      for (const annotation of annotationsPlugin?.getAnnotations(instanceLocation) ?? []) {
+      for (const annotation of annotationsPlugin?.getAnnotations(context.instanceLocation) ?? []) {
         const defaultSnippets = (annotation["https://microsoft.com/keyword/defaultSnippets"]
           ?? annotation["https://json-schema.org/keyword/unknown#defaultSnippets"]
           ?? []) as DefaultSnippet[];
@@ -47,7 +43,7 @@ export class DefaultSnippetsCompletionsProvider implements CompletionsProvider {
             detail: snippet.description,
             insertTextFormat: InsertTextFormat.Snippet,
             textEdit: {
-              range,
+              range: context.range,
               newText: normalizeSnippetBody(snippet)
             }
           });
