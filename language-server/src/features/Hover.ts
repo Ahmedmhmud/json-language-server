@@ -8,6 +8,10 @@ import type { JsonSchema } from "../services/JsonSchema.ts";
 
 export class Hover {
   constructor(server: Server, jsonDocuments: JsonDocuments, jsonSchema: JsonSchema) {
+    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, (jsonDocument) => {
+      return new AnnotationsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
+    });
+
     server.onInitialize(() => {
       const serverCapabilities: ServerCapabilities = {
         hoverProvider: true

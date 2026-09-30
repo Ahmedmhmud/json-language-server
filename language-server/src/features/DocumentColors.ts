@@ -22,6 +22,10 @@ export class DocumentColors {
   constructor(server: Server, jsonDocuments: JsonDocuments, jsonSchema: JsonSchema) {
     this.jsonDocuments = jsonDocuments;
 
+    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, (jsonDocument) => {
+      return new AnnotationsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
+    });
+
     server.onInitialize(() => {
       const serverCapabilities: ServerCapabilities = {
         colorProvider: true

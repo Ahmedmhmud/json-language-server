@@ -158,4 +158,25 @@ export class JsonDocument implements TextDocument {
   getNodeValue(node: jsonc.Node) {
     return jsonc.getNodeValue(node);
   }
+
+  collectIncompleteLocations() {
+    const incompleteLocations: Set<string> = new Set();
+    if (!this.ast) {
+      return incompleteLocations;
+    }
+
+    this.walkNodes(this.ast, (node) => {
+      if (node.type === "object") {
+        for (const propertyNode of node.children!) {
+          if (propertyNode.children!.length === 1) {
+            incompleteLocations.add(this.getPointerForNode(propertyNode));
+          }
+        }
+      } else if (node.type === "array") {
+        const pointer = JsonPointer.append(`${node.children!.length}`, this.getPointerForNode(node));
+        incompleteLocations.add(pointer);
+      }
+    });
+    return incompleteLocations;
+  }
 }

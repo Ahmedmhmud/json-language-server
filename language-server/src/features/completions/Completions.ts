@@ -29,34 +29,12 @@ export class Completions {
     this.jsonDocuments = jsonDocuments;
     this.providers = providers;
 
-    const collectIncompleteLocations = (jsonDocument: JsonDocument) => {
-      const incompleteLocations: Set<string> = new Set();
-      const ast = jsonDocument.findNodeAtPointer("");
-      if (!ast) {
-        return incompleteLocations;
-      }
-
-      jsonDocument.walkNodes(ast, (node) => {
-        if (node.type === "object") {
-          for (const propertyNode of node.children!) {
-            if (propertyNode.children!.length === 1) {
-              incompleteLocations.add(jsonDocument.getPointerForNode(propertyNode));
-            }
-          }
-        } else if (node.type === "array") {
-          const pointer = JsonPointer.append(`${node.children!.length}`, jsonDocument.getPointerForNode(node));
-          incompleteLocations.add(pointer);
-        }
-      });
-      return incompleteLocations;
-    };
-
     jsonSchema.registerPlugin(CompletionsEvaluationPlugin.id, (jsonDocument) => {
-      return new CompletionsEvaluationPlugin(collectIncompleteLocations(jsonDocument));
+      return new CompletionsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
     });
 
     jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, (jsonDocument) => {
-      return new AnnotationsEvaluationPlugin(collectIncompleteLocations(jsonDocument));
+      return new AnnotationsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
     });
 
     server.onInitialize(() => {
