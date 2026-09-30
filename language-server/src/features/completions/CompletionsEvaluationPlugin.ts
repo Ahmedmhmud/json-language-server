@@ -25,6 +25,8 @@ type SubschemaResult = {
 };
 
 export class CompletionsEvaluationPlugin implements EvaluationPlugin<CompletionsContext> {
+  static readonly id = "completions";
+
   private completions: Record<string, JsonValueSet> = Object.create(null);
   private incompleteLocations: Set<string>;
 
@@ -51,6 +53,10 @@ export class CompletionsEvaluationPlugin implements EvaluationPlugin<Completions
           const schemaUri = properties[propertyName];
           const completions = this.buildCompletions(schemaUri, schemaContext);
           schemaContext.completions![pointer] = schemaContext.completions![pointer]?.intersect(completions) ?? completions;
+
+          if (this.incompleteLocations.has(pointer)) {
+            context.evaluatedProperties?.add(propertyName);
+          }
         }
         break;
       }

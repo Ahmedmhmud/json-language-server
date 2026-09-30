@@ -1,16 +1,24 @@
 import * as JsonPointer from "@hyperjump/json-pointer";
+import * as Pact from "@hyperjump/pact";
 import { JsonDocuments } from "../../services/JsonDocuments.ts";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { CompletionsEvaluationPlugin } from "./CompletionsEvaluationPlugin.ts";
+import { AnnotationsEvaluationPlugin } from "../AnnotationsEvaluationPlugin.ts";
 
-import type { CompletionItem, CompletionParams, ServerCapabilities } from "vscode-languageserver";
+import type { CompletionItem, Position, ServerCapabilities, Range } from "vscode-languageserver";
+import type { Node } from "jsonc-parser";
 import type { JsonSchema } from "../../services/JsonSchema.ts";
 import type { Server } from "../../services/Server.ts";
 
-const completionsEvaluationPluginId = "completions";
-
 export type CompletionsProvider = {
-  getCompletions(jsonDocument: JsonDocument, params: CompletionParams): Promise<CompletionItem[]>;
+  getCompletions(jsonDocument: JsonDocument, context: CompletionContext): Promise<CompletionItem[]>;
+};
+
+export type CompletionContext = {
+  node: Node;
+  instanceLocation: string;
+  range: Range;
+  position: Position;
 };
 
 export class Completions {
@@ -21,26 +29,12 @@ export class Completions {
     this.jsonDocuments = jsonDocuments;
     this.providers = providers;
 
-    jsonSchema.registerPlugin(completionsEvaluationPluginId, (jsonDocument) => {
-      const incompleteLocations: Set<string> = new Set();
-      const ast = jsonDocument.findNodeAtPointer("");
-      if (!ast) {
-        return new CompletionsEvaluationPlugin(incompleteLocations);
-      }
+    jsonSchema.registerPlugin(CompletionsEvaluationPlugin.id, (jsonDocument) => {
+      return new CompletionsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
+    });
 
-      jsonDocument.walkNodes(ast, (node) => {
-        if (node.type === "object") {
-          for (const propertyNode of node.children!) {
-            if (propertyNode.children!.length === 1) {
-              incompleteLocations.add(jsonDocument.getPointerForNode(propertyNode));
-            }
-          }
-        } else if (node.type === "array") {
-          const pointer = JsonPointer.append(`${node.children!.length}`, jsonDocument.getPointerForNode(node));
-          incompleteLocations.add(pointer);
-        }
-      });
-      return new CompletionsEvaluationPlugin(incompleteLocations);
+    jsonSchema.registerPlugin(AnnotationsEvaluationPlugin.id, (jsonDocument) => {
+      return new AnnotationsEvaluationPlugin(jsonDocument.collectIncompleteLocations());
     });
 
     server.onInitialize(() => {
@@ -69,12 +63,57 @@ export class Completions {
         }
       }
 
+      const context = getCompletionContext(jsonDocument, params.position);
+      if (!context) {
+        return [];
+      }
+
       const completionItems: CompletionItem[] = [];
       for (const provider of this.providers) {
-        completionItems.push(...await provider.getCompletions(jsonDocument, params));
+        completionItems.push(...await provider.getCompletions(jsonDocument, context));
       }
 
       return completionItems;
     });
   }
 }
+
+const getCompletionContext = (jsonDocument: JsonDocument, position: Position): CompletionContext | undefined => {
+  const node = jsonDocument.findNodeAtPosition({ ...position, character: position.character - 1 });
+  if (!node) {
+    return;
+  }
+
+  const cursorOffset = jsonDocument.offsetAt(position);
+
+  let instanceLocation: string;
+  let range: Range;
+
+  switch (node.type) {
+    case "property":
+      if (node.colonOffset === undefined) {
+        return;
+      }
+
+      instanceLocation = jsonDocument.getPointerForNode(node);
+      range = { start: jsonDocument.positionAt(node.colonOffset + 1), end: position };
+      break;
+
+    case "array":
+      const index = Pact.pipe(
+        node.children!,
+        Pact.takeWhile((itemNode) => cursorOffset >= itemNode.offset),
+        Pact.count
+      );
+
+      instanceLocation = JsonPointer.append(`${index}`, jsonDocument.getPointerForNode(node));
+      range = { start: position, end: position };
+      break;
+
+    default:
+      instanceLocation = jsonDocument.getPointerForNode(node);
+      range = jsonDocument.rangeAt(node.offset, node.offset + node.length);
+  }
+
+  return { node, instanceLocation, range, position };
+};

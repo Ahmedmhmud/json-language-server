@@ -3046,6 +3046,43 @@ describe("Value Completions", () => {
     ]);
   });
 
+  test("properties takes precedence over unevaluatedProperties for an incomplete property", async () => {
+    const fixtureSchemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "value": {
+          "allOf": [
+            {
+              "properties": {
+                "known": { "enum": ["a", "b"] }
+              }
+            }
+          ],
+          "unevaluatedProperties": { "enum": ["c", "d"] }
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${fixtureSchemaUri}",
+      "value": {
+        "known":
+      }
+    }`);
+    const uri = await client.openDocument("instance.json");
+
+    const completions = await client.sendRequest(CompletionRequest.type, {
+      textDocument: { uri },
+      position: { line: 3, character: 16 }
+    });
+
+    expect(completions).toMatchObject([
+      { label: `"a"` },
+      { label: `"b"` }
+    ]);
+  });
+
   test("additionalProperties takes precedence over unevaluatedProperties", async () => {
     const fixtureSchemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",
