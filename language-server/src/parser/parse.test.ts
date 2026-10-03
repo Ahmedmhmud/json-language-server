@@ -136,6 +136,22 @@ describe("parse", () => {
     ]);
   });
 
+  test("an invalid unicode escape points at the escape sequence", () => {
+    const { errors } = parse(`{ "a": "x\\u12G4" }`);
+
+    expect(errors).toEqual([
+      { code: "invalid-escape", offset: 9, length: 4 }
+    ]);
+  });
+
+  test("an invalid unicode escape after a valid one points at the invalid one", () => {
+    const { errors } = parse(`{ "a": "\\u0041\\uZZ" }`);
+
+    expect(errors).toEqual([
+      { code: "invalid-escape", offset: 14, length: 2 }
+    ]);
+  });
+
   test("a number with a leading zero is invalid", () => {
     const { errors } = parse(`{ "a": 01 }`);
 

@@ -91,9 +91,11 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
         return;
 
       case jsonc.ScanError.InvalidEscapeCharacter:
-      case jsonc.ScanError.InvalidUnicode:
-        report("invalid-escape", offset + invalidEscapeIndex(raw()), 2);
+      case jsonc.ScanError.InvalidUnicode: {
+        const escape = invalidEscape(raw());
+        report("invalid-escape", offset + escape.index, escape.length);
         return;
+      }
 
       case jsonc.ScanError.InvalidCharacter:
         report("invalid-character", offset + controlCharacterIndex(raw()), 1);
@@ -435,20 +437,37 @@ const controlCharacterIndex = (token: string) => {
   return 0;
 };
 
-const invalidEscapeIndex = (token: string) => {
+const invalidEscape = (token: string) => {
   for (let index = 0; index < token.length - 1; index++) {
     if (token[index] !== "\\") {
       continue;
     }
 
     if (!VALID_ESCAPES.has(token[index + 1])) {
-      return index;
+      return { index, length: 2 };
+    }
+
+    if (token[index + 1] === "u") {
+      const digits = hexDigitCount(token, index + 2);
+      if (digits < 4) {
+        return { index, length: 2 + digits };
+      }
+      index += 4;
     }
 
     index++;
   }
 
-  return 0;
+  return { index: 0, length: 2 };
+};
+
+const hexDigitCount = (token: string, start: number) => {
+  let count = 0;
+  while (count < 4 && /[0-9a-fA-F]/.test(token[start + count] ?? "")) {
+    count++;
+  }
+
+  return count;
 };
 
 const looksLikeProperty = (scanner: jsonc.JSONScanner, kind: jsonc.SyntaxKind) => {
