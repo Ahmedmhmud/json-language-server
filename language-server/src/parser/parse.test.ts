@@ -485,6 +485,145 @@ describe("recovery", () => {
     expect(root?.children?.[0]).toMatchObject({ offset: 2, length: 4 });
   });
 
+  test("a stray token in an array does not hide the items after it", () => {
+    const { root, errors } = parse(`[1, : 2]`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 4, length: 1, data: { found: ":" } }
+    ]);
+    expect(root?.children?.map((item) => item.value)).toEqual([1, 2]);
+  });
+
+  test("a stray token before a comma in an array is reported once", () => {
+    const { root, errors } = parse(`[1, :, 2]`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 4, length: 1, data: { found: ":" } }
+    ]);
+    expect(root?.children?.map((item) => item.value)).toEqual([1, 2]);
+  });
+
+  test("a stray token in a nested array does not hide the properties after it", () => {
+    const { root, errors } = parse(`{ "a": [1, : 2], "b": 3 }`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 11, length: 1, data: { found: ":" } }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "b"]);
+  });
+
+  test("a colon in place of a comma in an array is unexpected and leaves the comma missing", () => {
+    const { root, errors } = parse(`[1 : 2]`);
+
+    expect(errors).toEqual([
+      { code: "comma-expected", offset: 1, length: 1 },
+      { code: "unexpected-token", offset: 3, length: 1, data: { found: ":" } }
+    ]);
+    expect(root?.children?.map((item) => item.value)).toEqual([1, 2]);
+  });
+
+  test("consecutive stray tokens in an array are reported as one error", () => {
+    const { root, errors } = parse(`[1, : : 2]`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 4, length: 3, data: { found: ": :" } }
+    ]);
+    expect(root?.children?.map((item) => item.value)).toEqual([1, 2]);
+  });
+
+  test("a comma after skipped text is not an extra comma", () => {
+    const { errors } = parse(`[1 :, 2]`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 3, length: 1, data: { found: ":" } }
+    ]);
+  });
+
+  test("a number used as a property key is an unquoted key", () => {
+    const { root, errors } = parse(`{ 1: 2, "b": 3 }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-not-quoted", offset: 2, length: 1 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["1", "b"]);
+  });
+
+  test("an invalid number used as a property key is only reported as an unquoted key", () => {
+    const { errors } = parse(`{ 01: 2 }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-not-quoted", offset: 2, length: 2 }
+    ]);
+  });
+
+  test("a keyword used as a property key is an unquoted key", () => {
+    const { root, errors } = parse(`{ true: 1 }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-not-quoted", offset: 2, length: 4 }
+    ]);
+    expect(root?.children?.[0].children?.[0].value).toBe("true");
+  });
+
+  test("a keyword alone in an object is a key missing its colon and value", () => {
+    const { root, errors } = parse(`{ true, "b": 1 }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-not-quoted", offset: 2, length: 4 },
+      { code: "colon-expected", offset: 2, length: 4 },
+      { code: "value-expected", offset: 2, length: 4 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["true", "b"]);
+  });
+
+  test("a colon with no key is a property with an empty key", () => {
+    const { root, errors } = parse(`{ "a": 1, : 2, "b": 3 }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-expected", offset: 10, length: 1 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "", "b"]);
+    expect(root?.children?.[1].children?.[1].value).toBe(2);
+  });
+
+  test("a colon in place of a comma in an object starts a property with an empty key", () => {
+    const { root, errors } = parse(`{ "a": 1 : 2, "b": 3 }`);
+
+    expect(errors).toEqual([
+      { code: "comma-expected", offset: 7, length: 1 },
+      { code: "property-key-expected", offset: 9, length: 1 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "", "b"]);
+  });
+
+  test("a container with no key is the value of a property with an empty key", () => {
+    const { root, errors } = parse(`{ "a": 1, { "x": 1 } }`);
+
+    expect(errors).toEqual([
+      { code: "property-key-expected", offset: 10, length: 1 }
+    ]);
+    expect(root?.children?.[1].children?.[0].value).toBe("");
+    expect(root?.children?.[1].children?.[1].type).toBe("object");
+  });
+
+  test("a doubled colon is unexpected and the value after it is kept", () => {
+    const { root, errors } = parse(`{ "a": : 1 }`);
+
+    expect(errors).toEqual([
+      { code: "unexpected-token", offset: 7, length: 1, data: { found: ":" } }
+    ]);
+    expect(root?.children?.[0].children?.[1].value).toBe(1);
+  });
+
+  test("a doubled colon with no value reports the missing value at the first colon", () => {
+    const { errors } = parse(`{ "a": : }`);
+
+    expect(errors).toEqual([
+      { code: "value-expected", offset: 5, length: 1 },
+      { code: "unexpected-token", offset: 7, length: 1, data: { found: ":" } }
+    ]);
+  });
+
   test("a comma-only array reports trailing-comma on the comma", () => {
     const { errors } = parse(`[,]`);
 

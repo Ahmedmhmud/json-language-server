@@ -6,6 +6,7 @@ export type SyntaxErrorCode
   = "trailing-comma"
     | "property-key-not-quoted"
     | "property-key-single-quoted"
+    | "property-key-expected"
     | "string-single-quoted"
     | "comma-expected"
     | "colon-expected"
@@ -19,6 +20,7 @@ export type SyntaxErrorCode
     | "comment-not-allowed"
     | "comment-not-closed"
     | "invalid-literal"
+    | "unexpected-token"
     | "end-of-file-expected";
 
 export type SyntaxError = {
@@ -39,6 +41,13 @@ export type ParseOptions = {
 
 type MutableNode = {
   -readonly [K in keyof Node]: Node[K];
+};
+
+type Separator = {
+  after: MutableNode | undefined;
+  offset: number;
+  length: number;
+  errorIndex: number;
 };
 
 const NUMBER_TERMINATORS = new Set([",", ":", "{", "}", "[", "]", "\"", "/"]);
@@ -199,14 +208,42 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     }
   };
 
-  const reportMissing = () => {
-    report("value-expected", offset, Math.max(length, 1));
+  const reportCommaExpected = (separator: Separator) => {
+    if (separator.after && !unclosed.has(separator.after)) {
+      errors.splice(separator.errorIndex, 0, {
+        code: "comma-expected",
+        offset: separator.offset,
+        length: Math.max(separator.length, 1)
+      });
+    }
   };
 
-  const reportCommaExpected = (after: MutableNode | undefined) => {
-    if (!after || !unclosed.has(after)) {
-      reportAtPrevious("comma-expected");
+  const separatorAfter = (after: MutableNode | undefined): Separator => {
+    return { after, offset: previousOffset, length: previousLength, errorIndex: errors.length };
+  };
+
+  const parseSeparator = (closer: jsonc.SyntaxKind) => {
+    const commaOffset = offset;
+    next();
+    if (kind() === closer) {
+      report("trailing-comma", commaOffset, 1);
     }
+  };
+
+  const skipStrayColons = () => {
+    const start = offset;
+    while (kind() === jsonc.SyntaxKind.ColonToken) {
+      next();
+    }
+
+    const end = previousOffset + previousLength;
+    report("unexpected-token", start, end - start, { found: text.slice(start, end) });
+  };
+
+  const isEndOfContainer = () => {
+    return kind() === jsonc.SyntaxKind.CloseBraceToken
+      || kind() === jsonc.SyntaxKind.CloseBracketToken
+      || kind() === jsonc.SyntaxKind.EOF;
   };
 
   const skipExtraComma = (closer: jsonc.SyntaxKind) => {
@@ -248,7 +285,7 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     return result;
   };
 
-  const parseUnknownAsString = (code: SyntaxErrorCode, parent?: MutableNode) => {
+  const parseTokenAsString = (code: SyntaxErrorCode, parent?: MutableNode) => {
     report(code, offset, length);
     const result = node("string", offset, parent);
     result.value = raw().replace(/^'|'$/g, "");
@@ -257,23 +294,35 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     return result;
   };
 
-  const parseProperty = (parent: MutableNode): MutableNode | undefined => {
+  const parseProperty = (parent: MutableNode): MutableNode => {
     const property = node("property", offset, parent);
     property.children = [];
 
-    if (kind() === jsonc.SyntaxKind.Unknown) {
-      const code = raw().startsWith("'") ? "property-key-single-quoted" : "property-key-not-quoted";
-      property.children.push(parseUnknownAsString(code, property));
+    const keyMissing = !startsKey(kind());
+    if (keyMissing) {
+      report("property-key-expected", offset, 1);
+      const key = node("string", offset, property);
+      key.value = "";
+      property.children.push(key);
     } else if (kind() === jsonc.SyntaxKind.StringLiteral) {
       property.children.push(parseString(property));
     } else {
-      return undefined;
+      if (errors.at(-1)?.code === "number-invalid" && errors.at(-1)?.offset === offset) {
+        errors.pop();
+      }
+      const code = raw().startsWith("'") ? "property-key-single-quoted" : "property-key-not-quoted";
+      property.children.push(parseTokenAsString(code, property));
     }
 
+    let valueErrorIndex = errors.length;
     if (kind() === jsonc.SyntaxKind.ColonToken) {
       property.colonOffset = offset;
       next();
-    } else {
+      valueErrorIndex = errors.length;
+      if (kind() === jsonc.SyntaxKind.ColonToken) {
+        skipStrayColons();
+      }
+    } else if (!keyMissing) {
       reportAtPrevious("colon-expected");
     }
 
@@ -281,8 +330,11 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     if (value) {
       property.children.push(value);
       finish(property, value.offset + value.length);
-    } else {
+    } else if (property.colonOffset === undefined) {
       reportAtPrevious("value-expected");
+      finish(property, offset);
+    } else {
+      errors.splice(valueErrorIndex, 0, { code: "value-expected", offset: property.colonOffset, length: 1 });
       finish(property, offset);
     }
 
@@ -295,27 +347,25 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     const openOffset = offset;
     next();
 
-    while (kind() !== jsonc.SyntaxKind.CloseBraceToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBracketToken) {
-      const property = parseProperty(object);
-      if (!property) {
-        if (kind() === jsonc.SyntaxKind.CommaToken) {
-          skipExtraComma(jsonc.SyntaxKind.CloseBraceToken);
-          continue;
-        }
-        reportMissing();
-        break;
-      }
-      object.children.push(property);
-
+    let separator: Separator | undefined;
+    while (!isEndOfContainer()) {
       if (kind() === jsonc.SyntaxKind.CommaToken) {
-        const commaOffset = offset;
-        next();
-        if (kind() === jsonc.SyntaxKind.CloseBraceToken) {
-          report("trailing-comma", commaOffset, 1);
+        if (separator) {
+          parseSeparator(jsonc.SyntaxKind.CloseBraceToken);
+          separator = undefined;
+        } else {
+          skipExtraComma(jsonc.SyntaxKind.CloseBraceToken);
         }
-      } else if (property.children?.[1] && kind() !== jsonc.SyntaxKind.CloseBraceToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBracketToken) {
-        reportCommaExpected(property.children[1]);
+        continue;
       }
+
+      if (separator) {
+        reportCommaExpected(separator);
+      }
+
+      const property = parseProperty(object);
+      object.children.push(property);
+      separator = separatorAfter(property.children?.[1]);
     }
 
     if (kind() !== jsonc.SyntaxKind.CloseBraceToken) {
@@ -334,32 +384,35 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     const openOffset = offset;
     next();
 
-    while (kind() !== jsonc.SyntaxKind.CloseBracketToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBraceToken) {
+    let separator: Separator | undefined;
+    while (!isEndOfContainer()) {
       if (kind() === jsonc.SyntaxKind.CommaToken) {
-        skipExtraComma(jsonc.SyntaxKind.CloseBracketToken);
+        if (separator) {
+          parseSeparator(jsonc.SyntaxKind.CloseBracketToken);
+          separator = undefined;
+        } else {
+          skipExtraComma(jsonc.SyntaxKind.CloseBracketToken);
+        }
         continue;
+      }
+
+      if (kind() === jsonc.SyntaxKind.ColonToken) {
+        skipStrayColons();
+        separator ??= separatorAfter(undefined);
+        continue;
+      }
+
+      if (separator) {
+        reportCommaExpected(separator);
       }
 
       if (looksLikeProperty(scanner, kind())) {
         break;
       }
 
-      const item = parseValue(array);
-      if (!item) {
-        reportMissing();
-        break;
-      }
+      const item = parseValue(array)!;
       array.children.push(item);
-
-      if (kind() === jsonc.SyntaxKind.CommaToken) {
-        const commaOffset = offset;
-        next();
-        if (kind() === jsonc.SyntaxKind.CloseBracketToken) {
-          report("trailing-comma", commaOffset, 1);
-        }
-      } else if (kind() !== jsonc.SyntaxKind.CloseBracketToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBraceToken) {
-        reportCommaExpected(item);
-      }
+      separator = separatorAfter(item);
     }
 
     if (kind() !== jsonc.SyntaxKind.CloseBracketToken) {
@@ -391,7 +444,7 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
 
       case jsonc.SyntaxKind.Unknown: {
         if (raw().startsWith("'")) {
-          return parseUnknownAsString("string-single-quoted", parent);
+          return parseTokenAsString("string-single-quoted", parent);
         }
 
         report("invalid-literal", offset, length, { found: raw() });
@@ -468,6 +521,19 @@ const hexDigitCount = (token: string, start: number) => {
   }
 
   return count;
+};
+
+const KEY_STARTS = new Set([
+  jsonc.SyntaxKind.StringLiteral,
+  jsonc.SyntaxKind.NumericLiteral,
+  jsonc.SyntaxKind.TrueKeyword,
+  jsonc.SyntaxKind.FalseKeyword,
+  jsonc.SyntaxKind.NullKeyword,
+  jsonc.SyntaxKind.Unknown
+]);
+
+const startsKey = (kind: jsonc.SyntaxKind) => {
+  return KEY_STARTS.has(kind);
 };
 
 const looksLikeProperty = (scanner: jsonc.JSONScanner, kind: jsonc.SyntaxKind) => {
