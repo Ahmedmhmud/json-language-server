@@ -74,11 +74,7 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
   const kind = () => kindState;
 
   const report = (code: SyntaxErrorCode, errorOffset: number, errorLength: number, data?: Record<string, string>) => {
-    const error: SyntaxError = { code, offset: errorOffset, length: errorLength };
-    if (data) {
-      error.data = data;
-    }
-    errors.push(error);
+    errors.push({ code, offset: errorOffset, length: errorLength, data });
   };
 
   const reportAtPrevious = (code: SyntaxErrorCode) => {
@@ -222,14 +218,6 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     return { after, offset: previousOffset, length: previousLength, errorIndex: errors.length };
   };
 
-  const parseSeparator = (closer: jsonc.SyntaxKind) => {
-    const commaOffset = offset;
-    next();
-    if (kind() === closer) {
-      report("trailing-comma", commaOffset, 1);
-    }
-  };
-
   const skipStrayColons = () => {
     const start = offset;
     while (kind() === jsonc.SyntaxKind.ColonToken) {
@@ -240,13 +228,28 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     report("unexpected-token", start, end - start, { found: text.slice(start, end) });
   };
 
+  const looksLikeProperty = () => {
+    if (kind() !== jsonc.SyntaxKind.StringLiteral) {
+      return false;
+    }
+
+    const savedPosition = scanner.getPosition();
+    let peekKind = scanner.scan();
+    while (WHITESPACE_AND_COMMENTS.has(peekKind)) {
+      peekKind = scanner.scan();
+    }
+    scanner.setPosition(savedPosition);
+
+    return peekKind === jsonc.SyntaxKind.ColonToken;
+  };
+
   const isEndOfContainer = () => {
     return kind() === jsonc.SyntaxKind.CloseBraceToken
       || kind() === jsonc.SyntaxKind.CloseBracketToken
       || kind() === jsonc.SyntaxKind.EOF;
   };
 
-  const skipExtraComma = (closer: jsonc.SyntaxKind) => {
+  const parseComma = (closer: jsonc.SyntaxKind, isExtra: boolean) => {
     const commaOffset = offset;
     const beforeOffset = previousOffset;
     const beforeLength = previousLength;
@@ -254,32 +257,14 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
 
     if (kind() === closer) {
       report("trailing-comma", commaOffset, 1);
-    } else {
+    } else if (isExtra) {
       report("value-expected", beforeOffset, Math.max(beforeLength, 1));
     }
   };
 
-  const parseString = (parent?: MutableNode) => {
-    const result = node("string", offset, parent);
-    result.value = tokenValue;
-    finish(result, offset + length);
-    next();
-    return result;
-  };
-
-  const parseLiteral = (parent?: MutableNode): MutableNode => {
-    const type: NodeType = kind() === jsonc.SyntaxKind.NumericLiteral ? "number" : kind() === jsonc.SyntaxKind.NullKeyword ? "null" : "boolean";
+  const parseScalar = (type: NodeType, value: unknown, parent?: MutableNode) => {
     const result = node(type, offset, parent);
-
-    if (type === "number") {
-      const parsed = Number(raw());
-      result.value = isNaN(parsed) ? 0 : parsed;
-    } else if (type === "boolean") {
-      result.value = kind() === jsonc.SyntaxKind.TrueKeyword;
-    } else {
-      result.value = null;
-    }
-
+    result.value = value;
     finish(result, offset + length);
     next();
     return result;
@@ -287,25 +272,21 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
 
   const parseTokenAsString = (code: SyntaxErrorCode, parent?: MutableNode) => {
     report(code, offset, length);
-    const result = node("string", offset, parent);
-    result.value = raw().replace(/^'|'$/g, "");
-    finish(result, offset + length);
-    next();
-    return result;
+    return parseScalar("string", raw().replace(/^'|'$/g, ""), parent);
   };
 
   const parseProperty = (parent: MutableNode): MutableNode => {
     const property = node("property", offset, parent);
     property.children = [];
 
-    const keyMissing = !startsKey(kind());
+    const keyMissing = !KEY_STARTS.has(kind());
     if (keyMissing) {
       report("property-key-expected", offset, 1);
       const key = node("string", offset, property);
       key.value = "";
       property.children.push(key);
     } else if (kind() === jsonc.SyntaxKind.StringLiteral) {
-      property.children.push(parseString(property));
+      property.children.push(parseScalar("string", tokenValue, property));
     } else {
       if (errors.at(-1)?.code === "number-invalid" && errors.at(-1)?.offset === offset) {
         errors.pop();
@@ -326,7 +307,7 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
       reportAtPrevious("colon-expected");
     }
 
-    const value = looksLikeProperty(scanner, kind()) ? undefined : parseValue(property);
+    const value = looksLikeProperty() ? undefined : parseValue(property);
     if (value) {
       property.children.push(value);
       finish(property, value.offset + value.length);
@@ -341,62 +322,22 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     return property;
   };
 
-  const parseObject = (parent?: MutableNode): MutableNode => {
-    const object = node("object", offset, parent);
-    object.children = [];
+  const parseContainer = (type: "object" | "array", parent?: MutableNode): MutableNode => {
+    const container = node(type, offset, parent);
+    container.children = [];
     const openOffset = offset;
+    const closer = type === "object" ? jsonc.SyntaxKind.CloseBraceToken : jsonc.SyntaxKind.CloseBracketToken;
     next();
 
     let separator: Separator | undefined;
     while (!isEndOfContainer()) {
       if (kind() === jsonc.SyntaxKind.CommaToken) {
-        if (separator) {
-          parseSeparator(jsonc.SyntaxKind.CloseBraceToken);
-          separator = undefined;
-        } else {
-          skipExtraComma(jsonc.SyntaxKind.CloseBraceToken);
-        }
+        parseComma(closer, !separator);
+        separator = undefined;
         continue;
       }
 
-      if (separator) {
-        reportCommaExpected(separator);
-      }
-
-      const property = parseProperty(object);
-      object.children.push(property);
-      separator = separatorAfter(property.children?.[1]);
-    }
-
-    if (kind() !== jsonc.SyntaxKind.CloseBraceToken) {
-      reportNotClosed("brace-not-closed", object, openOffset);
-      return finish(object, offset);
-    }
-
-    const end = offset + length;
-    next();
-    return finish(object, end);
-  };
-
-  const parseArray = (parent?: MutableNode): MutableNode => {
-    const array = node("array", offset, parent);
-    array.children = [];
-    const openOffset = offset;
-    next();
-
-    let separator: Separator | undefined;
-    while (!isEndOfContainer()) {
-      if (kind() === jsonc.SyntaxKind.CommaToken) {
-        if (separator) {
-          parseSeparator(jsonc.SyntaxKind.CloseBracketToken);
-          separator = undefined;
-        } else {
-          skipExtraComma(jsonc.SyntaxKind.CloseBracketToken);
-        }
-        continue;
-      }
-
-      if (kind() === jsonc.SyntaxKind.ColonToken) {
+      if (type === "array" && kind() === jsonc.SyntaxKind.ColonToken) {
         skipStrayColons();
         separator ??= separatorAfter(undefined);
         continue;
@@ -406,54 +347,57 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
         reportCommaExpected(separator);
       }
 
-      if (looksLikeProperty(scanner, kind())) {
+      if (type === "array" && looksLikeProperty()) {
         break;
       }
 
-      const item = parseValue(array)!;
-      array.children.push(item);
-      separator = separatorAfter(item);
+      const item = type === "object" ? parseProperty(container) : parseValue(container)!;
+      container.children.push(item);
+      separator = separatorAfter(type === "object" ? item.children?.[1] : item);
     }
 
-    if (kind() !== jsonc.SyntaxKind.CloseBracketToken) {
-      reportNotClosed("bracket-not-closed", array, openOffset);
-      return finish(array, offset);
+    if (kind() !== closer) {
+      reportNotClosed(type === "object" ? "brace-not-closed" : "bracket-not-closed", container, openOffset);
+      return finish(container, offset);
     }
 
     const end = offset + length;
     next();
-    return finish(array, end);
+    return finish(container, end);
   };
 
   const parseValue = (parent?: MutableNode): MutableNode | undefined => {
     switch (kind()) {
       case jsonc.SyntaxKind.OpenBraceToken:
-        return parseObject(parent);
+        return parseContainer("object", parent);
 
       case jsonc.SyntaxKind.OpenBracketToken:
-        return parseArray(parent);
+        return parseContainer("array", parent);
 
       case jsonc.SyntaxKind.StringLiteral:
-        return parseString(parent);
+        return parseScalar("string", tokenValue, parent);
 
-      case jsonc.SyntaxKind.NumericLiteral:
+      case jsonc.SyntaxKind.NumericLiteral: {
+        const number = Number(raw());
+        return parseScalar("number", isNaN(number) ? 0 : number, parent);
+      }
+
       case jsonc.SyntaxKind.TrueKeyword:
-      case jsonc.SyntaxKind.FalseKeyword:
-      case jsonc.SyntaxKind.NullKeyword:
-        return parseLiteral(parent);
+        return parseScalar("boolean", true, parent);
 
-      case jsonc.SyntaxKind.Unknown: {
+      case jsonc.SyntaxKind.FalseKeyword:
+        return parseScalar("boolean", false, parent);
+
+      case jsonc.SyntaxKind.NullKeyword:
+        return parseScalar("null", null, parent);
+
+      case jsonc.SyntaxKind.Unknown:
         if (raw().startsWith("'")) {
           return parseTokenAsString("string-single-quoted", parent);
         }
 
         report("invalid-literal", offset, length, { found: raw() });
-        const result = node("null", offset, parent);
-        result.value = null;
-        finish(result, offset + length);
-        next();
-        return result;
-      }
+        return parseScalar("null", null, parent);
 
       default:
         return undefined;
@@ -531,25 +475,6 @@ const KEY_STARTS = new Set([
   jsonc.SyntaxKind.NullKeyword,
   jsonc.SyntaxKind.Unknown
 ]);
-
-const startsKey = (kind: jsonc.SyntaxKind) => {
-  return KEY_STARTS.has(kind);
-};
-
-const looksLikeProperty = (scanner: jsonc.JSONScanner, kind: jsonc.SyntaxKind) => {
-  if (kind !== jsonc.SyntaxKind.StringLiteral) {
-    return false;
-  }
-
-  const savedPosition = scanner.getPosition();
-  let peekKind = scanner.scan();
-  while (WHITESPACE_AND_COMMENTS.has(peekKind)) {
-    peekKind = scanner.scan();
-  }
-  scanner.setPosition(savedPosition);
-
-  return peekKind === jsonc.SyntaxKind.ColonToken;
-};
 
 const WHITESPACE_AND_COMMENTS = new Set([
   jsonc.SyntaxKind.Trivia,
