@@ -17,6 +17,8 @@ type CompletionsContext = ValidationContext & {
   schemaEvaluatedProperties?: Set<string>;
   evaluatedItems?: Set<number>;
   schemaEvaluatedItems?: Set<number>;
+  completionsUnevaluatedProperties?: string[];
+  completionsUnevaluatedItems?: number[];
 };
 
 type SubschemaResult = {
@@ -123,7 +125,8 @@ export class CompletionsEvaluationPlugin implements EvaluationPlugin<Completions
           const [parentPointer, propertyName] = splitPointer(pointer);
           if (parentPointer === instance.pointer && !context.schemaEvaluatedProperties!.has(propertyName)) {
             schemaContext.completions![pointer] = schemaContext.completions![pointer]?.intersect(completions) ?? completions;
-            context.evaluatedProperties?.add(propertyName);
+            context.completionsUnevaluatedProperties ??= [];
+            context.completionsUnevaluatedProperties.push(propertyName);
           }
         }
         break;
@@ -197,7 +200,8 @@ export class CompletionsEvaluationPlugin implements EvaluationPlugin<Completions
             schemaContext.completions![pointer] = schemaContext.completions![pointer]?.intersect(completions) ?? completions;
 
             if (this.incompleteLocations.has(pointer)) {
-              context.evaluatedItems?.add(Number(itemIndex));
+              context.completionsUnevaluatedItems ??= [];
+              context.completionsUnevaluatedItems.push(itemIndex);
             }
           }
         }
@@ -207,6 +211,15 @@ export class CompletionsEvaluationPlugin implements EvaluationPlugin<Completions
   }
 
   afterKeyword(keywordNode: Node<unknown>, instance: JsonNode, context: CompletionsContext, valid: boolean, schemaContext: CompletionsContext): void {
+    // Unevaluated keywords mark incomplete locations as evaluated only after every plugin's beforeKeyword has run.
+    // Otherwise, other plugins would see them as already evaluated.
+    for (const propertyName of context.completionsUnevaluatedProperties ?? []) {
+      context.evaluatedProperties?.add(propertyName);
+    }
+    for (const itemIndex of context.completionsUnevaluatedItems ?? []) {
+      context.evaluatedItems?.add(itemIndex);
+    }
+
     if (!valid) {
       schemaContext.schemaFailedLocations!.add(instance.pointer);
       for (const location of context.failedLocations! ?? []) {

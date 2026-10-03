@@ -14,6 +14,8 @@ type MatchingSchemaContext = ValidationContext & {
   schemaEvaluatedProperties?: Set<string>;
   evaluatedItems?: Set<number>;
   schemaEvaluatedItems?: Set<number>;
+  annotationsUnevaluatedProperties?: string[];
+  annotationsUnevaluatedItems?: number[];
 };
 
 export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
@@ -82,7 +84,8 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const [parentPointer, propertyName] = splitPointer(pointer);
           if (parentPointer === instance.pointer && !context.schemaEvaluatedProperties!.has(propertyName)) {
             this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
-            context.evaluatedProperties?.add(propertyName);
+            context.annotationsUnevaluatedProperties ??= [];
+            context.annotationsUnevaluatedProperties.push(propertyName);
           }
         }
         break;
@@ -144,7 +147,8 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
           const itemIndex = Number(indexStr);
           if (parentPointer === instance.pointer && Number.isInteger(itemIndex) && !context.schemaEvaluatedItems!.has(itemIndex)) {
             this.recordBuiltAnnotation(pointer, schemaUri, schemaContext);
-            context.evaluatedItems?.add(itemIndex);
+            context.annotationsUnevaluatedItems ??= [];
+            context.annotationsUnevaluatedItems.push(itemIndex);
           }
         }
         break;
@@ -154,6 +158,15 @@ export class AnnotationsEvaluationPlugin implements EvaluationPlugin {
 
   afterKeyword(node: Node<unknown>, instance: JsonNode, context: MatchingSchemaContext, _valid: boolean, schemaContext: MatchingSchemaContext, keyword: Keyword<unknown>): void {
     const [keywordId, , keywordValue] = node;
+
+    // Unevaluated keywords mark incomplete locations as evaluated only after every plugin's beforeKeyword has run.
+    // Otherwise, other plugins would see them as already evaluated.
+    for (const propertyName of context.annotationsUnevaluatedProperties ?? []) {
+      context.evaluatedProperties?.add(propertyName);
+    }
+    for (const itemIndex of context.annotationsUnevaluatedItems ?? []) {
+      context.evaluatedItems?.add(itemIndex);
+    }
 
     if (keyword.annotation) {
       schemaContext.pendingAnnotations ??= {};
