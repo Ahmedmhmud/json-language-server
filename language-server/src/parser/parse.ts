@@ -47,7 +47,6 @@ type Separator = {
   after: MutableNode | undefined;
   offset: number;
   length: number;
-  errorIndex: number;
 };
 
 const NUMBER_TERMINATORS = new Set([",", ":", "{", "}", "[", "]", "\"", "/"]);
@@ -206,16 +205,12 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
 
   const reportCommaExpected = (separator: Separator) => {
     if (separator.after && !unclosed.has(separator.after)) {
-      errors.splice(separator.errorIndex, 0, {
-        code: "comma-expected",
-        offset: separator.offset,
-        length: Math.max(separator.length, 1)
-      });
+      report("comma-expected", separator.offset, Math.max(separator.length, 1));
     }
   };
 
   const separatorAfter = (after: MutableNode | undefined): Separator => {
-    return { after, offset: previousOffset, length: previousLength, errorIndex: errors.length };
+    return { after, offset: previousOffset, length: previousLength };
   };
 
   const skipStrayColons = () => {
@@ -295,11 +290,9 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
       property.children.push(parseTokenAsString(code, property));
     }
 
-    let valueErrorIndex = errors.length;
     if (kind() === jsonc.SyntaxKind.ColonToken) {
       property.colonOffset = offset;
       next();
-      valueErrorIndex = errors.length;
       if (kind() === jsonc.SyntaxKind.ColonToken) {
         skipStrayColons();
       }
@@ -311,11 +304,12 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     if (value) {
       property.children.push(value);
       finish(property, value.offset + value.length);
-    } else if (property.colonOffset === undefined) {
-      reportAtPrevious("value-expected");
-      finish(property, offset);
     } else {
-      errors.splice(valueErrorIndex, 0, { code: "value-expected", offset: property.colonOffset, length: 1 });
+      if (property.colonOffset === undefined) {
+        reportAtPrevious("value-expected");
+      } else {
+        report("value-expected", property.colonOffset, 1);
+      }
       finish(property, offset);
     }
 
@@ -417,6 +411,7 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
     report("end-of-file-expected", offset, Math.max(text.trimEnd().length - offset, 1));
   }
 
+  errors.sort((a, b) => a.offset - b.offset);
   return { root, errors };
 };
 

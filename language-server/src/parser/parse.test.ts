@@ -413,10 +413,10 @@ describe("recovery", () => {
           "c": [1, 2`);
 
     expect(errors).toEqual([
-      { code: "bracket-not-closed", offset: 49, length: 1 },
-      { code: "brace-not-closed", offset: 40, length: 10 },
+      { code: "brace-not-closed", offset: 8, length: 42 },
       { code: "brace-not-closed", offset: 23, length: 27 },
-      { code: "brace-not-closed", offset: 8, length: 42 }
+      { code: "brace-not-closed", offset: 40, length: 10 },
+      { code: "bracket-not-closed", offset: 49, length: 1 }
     ]);
   });
 
@@ -694,9 +694,9 @@ describe("recovery", () => {
     }`);
 
     expect(errors).toEqual([
+      { code: "bracket-not-closed", offset: 23, length: 3 },
       { code: "comma-expected", offset: 25, length: 1 },
-      { code: "bracket-not-closed", offset: 25, length: 1 },
-      { code: "bracket-not-closed", offset: 23, length: 3 }
+      { code: "bracket-not-closed", offset: 25, length: 1 }
     ]);
   });
 
