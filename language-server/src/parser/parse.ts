@@ -275,13 +275,13 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
       reportAtPrevious("colon-expected");
     }
 
-    const value = parseValue(property);
+    const value = looksLikeProperty(scanner, kind()) ? undefined : parseValue(property);
     if (value) {
       property.children.push(value);
       finish(property, value.offset + value.length);
     } else {
       reportAtPrevious("value-expected");
-      finish(property, scanner.getPosition());
+      finish(property, offset);
     }
 
     return property;
@@ -311,8 +311,8 @@ export const parse = (text: string, options: ParseOptions = {}): ParseResult => 
         if (kind() === jsonc.SyntaxKind.CloseBraceToken) {
           report("trailing-comma", commaOffset, 1);
         }
-      } else if (kind() !== jsonc.SyntaxKind.CloseBraceToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBracketToken) {
-        reportCommaExpected(property.children?.[1]);
+      } else if (property.children?.[1] && kind() !== jsonc.SyntaxKind.CloseBraceToken && kind() !== jsonc.SyntaxKind.EOF && kind() !== jsonc.SyntaxKind.CloseBracketToken) {
+        reportCommaExpected(property.children[1]);
       }
     }
 

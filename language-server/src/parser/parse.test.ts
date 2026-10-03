@@ -428,6 +428,47 @@ describe("recovery", () => {
     expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "b", "c"]);
   });
 
+  test("a property with no value does not take the next property's key as its value", () => {
+    const { root, errors } = parse(`{
+      "a":
+      "b": 1,
+      "c": 2
+    }`);
+
+    expect(errors).toEqual([
+      { code: "value-expected", offset: 11, length: 1 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "b", "c"]);
+  });
+
+  test("a property missing its colon does not take the next property's key as its value", () => {
+    const { root, errors } = parse(`{ "a" "b": 1, "c": 2 }`);
+
+    expect(errors).toEqual([
+      { code: "colon-expected", offset: 2, length: 3 },
+      { code: "value-expected", offset: 2, length: 3 }
+    ]);
+    expect(root?.children?.map((property) => property.children?.[0].value)).toEqual(["a", "b", "c"]);
+  });
+
+  test("a property with no value does not include the comma after it", () => {
+    const { root } = parse(`{ "a": , "b": 1 }`);
+
+    expect(root?.children?.[0]).toMatchObject({ offset: 2, length: 5 });
+  });
+
+  test("a property with no value does not include the closing brace", () => {
+    const { root } = parse(`{ "a": }`);
+
+    expect(root?.children?.[0]).toMatchObject({ offset: 2, length: 5 });
+  });
+
+  test("a property with no colon or value does not include the closing brace", () => {
+    const { root } = parse(`{ "a" }`);
+
+    expect(root?.children?.[0]).toMatchObject({ offset: 2, length: 4 });
+  });
+
   test("a comma-only array reports trailing-comma on the comma", () => {
     const { errors } = parse(`[,]`);
 
