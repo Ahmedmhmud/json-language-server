@@ -41,4 +41,52 @@ describe("Syntax Validation", () => {
 
     await expect(secondValidation).resolves.toHaveLength(0);
   });
+
+  test("diagnostic has a human readable message", async () => {
+    await client.writeDocument("test.json", `{ "name": }`);
+    const diagnostics = client.getDiagnostics("test.json");
+    await client.openDocument("test.json");
+
+    await expect(diagnostics).resolves.toMatchObject([{ message: "Expected a value" }]);
+  });
+
+  test("diagnostic message includes the invalid text", async () => {
+    await client.writeDocument("test.json", `{ "name": 01 }`);
+    const diagnostics = client.getDiagnostics("test.json");
+    await client.openDocument("test.json");
+
+    await expect(diagnostics).resolves.toMatchObject([{ message: "'01' is not a valid number" }]);
+  });
+});
+
+describe("Syntax Validation locale", () => {
+  let client: TestClient;
+
+  beforeEach(() => {
+    client = new TestClient();
+  });
+
+  afterEach(async () => {
+    await client.stop();
+  });
+
+  test("uses the locale given by the client", async () => {
+    await client.start({ locale: "en-US" });
+
+    await client.writeDocument("test.json", `{ "name": }`);
+    const diagnostics = client.getDiagnostics("test.json");
+    await client.openDocument("test.json");
+
+    await expect(diagnostics).resolves.toMatchObject([{ message: "Expected a value" }]);
+  });
+
+  test("falls back to en-US when the locale is not supported", async () => {
+    await client.start({ locale: "xx-XX" });
+
+    await client.writeDocument("test.json", `{ "name": }`);
+    const diagnostics = client.getDiagnostics("test.json");
+    await client.openDocument("test.json");
+
+    await expect(diagnostics).resolves.toMatchObject([{ message: "Expected a value" }]);
+  });
 });
