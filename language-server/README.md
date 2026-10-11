@@ -12,6 +12,10 @@ Contributions are welcome and encouraged! If you have a feature/bug/improvement
 you want to work on, it's usually best to open an issue to discuss the issue
 before starting work.
 
+Outside contributors are expected to wait for approval on the issue before
+submitting a PR. To keep reviews manageable, no one will be assigned more than
+one PR at a time.
+
 ### Automated Tests
 
 PRs are expected to include automated tests whenever possible.
