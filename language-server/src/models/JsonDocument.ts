@@ -143,18 +143,20 @@ export class JsonDocument implements TextDocument {
     return jsonc.findNodeAtOffset(this.ast, offset);
   }
 
-  walkNodes(node: jsonc.Node, fn: (node: jsonc.Node) => void) {
-    fn(node);
+  // The pointer is built along the way because getPointerForNode is slow for
+  // every node of a large document
+  walkNodes(node: jsonc.Node, fn: (node: jsonc.Node, pointer: string) => void, pointer = this.getPointerForNode(node)) {
+    fn(node, pointer);
 
     if (node.type === "array") {
-      for (const childNode of node.children!) {
-        this.walkNodes(childNode, fn);
-      }
+      node.children!.forEach((childNode, index) => {
+        this.walkNodes(childNode, fn, JsonPointer.append(String(index), pointer));
+      });
     } else if (node.type === "object") {
       for (const propertyNode of node.children!) {
         const valueNode = propertyNode.children?.[1];
         if (valueNode) {
-          this.walkNodes(valueNode, fn);
+          this.walkNodes(valueNode, fn, JsonPointer.append(propertyNode.children![0].value, pointer));
         }
       }
     }
@@ -170,16 +172,15 @@ export class JsonDocument implements TextDocument {
       return incompleteLocations;
     }
 
-    this.walkNodes(this.ast, (node) => {
+    this.walkNodes(this.ast, (node, pointer) => {
       if (node.type === "object") {
         for (const propertyNode of node.children!) {
           if (propertyNode.children!.length === 1) {
-            incompleteLocations.add(this.getPointerForNode(propertyNode));
+            incompleteLocations.add(JsonPointer.append(propertyNode.children![0].value, pointer));
           }
         }
       } else if (node.type === "array") {
-        const pointer = JsonPointer.append(`${node.children!.length}`, this.getPointerForNode(node));
-        incompleteLocations.add(pointer);
+        incompleteLocations.add(JsonPointer.append(`${node.children!.length}`, pointer));
       }
     });
     return incompleteLocations;

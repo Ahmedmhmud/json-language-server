@@ -1,6 +1,7 @@
 import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver";
 import { JsonDocument } from "../../models/JsonDocument.ts";
 import { LspEvaluationPlugin } from "../../evaluation/LspEvaluationPlugin.ts";
+import { tagDeprecated } from "./Completions.ts";
 
 import type { CompletionContext, CompletionsProvider } from "./Completions.ts";
 import type { CompletionItem } from "vscode-languageserver";
@@ -33,7 +34,7 @@ export class ValueCompletionsProvider implements CompletionsProvider {
         const label = completion.kind === "value" ? completion.value : typeSnippets[completion.type].label;
         const snippet = completion.kind === "value" ? escapeSnippet(completion.value) : typeSnippets[completion.type].snippet;
 
-        completions.push({
+        const completionItem: CompletionItem = {
           label,
           kind: CompletionItemKind.Value,
           labelDetails: {
@@ -44,7 +45,12 @@ export class ValueCompletionsProvider implements CompletionsProvider {
             range: context.range,
             newText: /^[:,]$/.test(jsonDocument.getText()[startOffset - 1]) ? ` ${snippet}` : snippet
           }
-        });
+        };
+
+        // A value is deprecated only because of what it is, not because its location is
+        tagDeprecated(completionItem, completion.annotations);
+
+        completions.push(completionItem);
       }
     } catch {
       // No completions on schema error

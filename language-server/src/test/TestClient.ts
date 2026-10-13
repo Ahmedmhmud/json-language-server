@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   ConfigurationRequest,
+  DiagnosticTag,
   DidChangeConfigurationNotification,
   DidChangeTextDocumentNotification,
   DidChangeWatchedFilesNotification,
@@ -184,6 +185,11 @@ export class TestClient {
           workDoneProgress: true
         },
         textDocument: {
+          publishDiagnostics: {
+            tagSupport: {
+              valueSet: [DiagnosticTag.Unnecessary, DiagnosticTag.Deprecated]
+            }
+          },
           semanticTokens: {
             dynamicRegistration: true,
             tokenTypes: [
