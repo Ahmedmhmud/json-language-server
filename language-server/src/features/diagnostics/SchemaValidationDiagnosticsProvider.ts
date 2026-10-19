@@ -11,6 +11,8 @@ export class SchemaValidationDiagnosticsProvider implements DiagnosticsProvider 
 
   constructor(jsonSchema: JsonSchema) {
     this.jsonSchema = jsonSchema;
+
+    jsonSchema.registerPlugin(ErrorMessageEvaluationPlugin.id, () => new ErrorMessageEvaluationPlugin());
   }
 
   async getDiagnostics(jsonDocument: JsonDocument) {
@@ -18,11 +20,12 @@ export class SchemaValidationDiagnosticsProvider implements DiagnosticsProvider 
 
     try {
       const result = await this.jsonSchema.validate(jsonDocument);
-      const errorMessagePlugin = result?.plugins.get(ErrorMessageEvaluationPlugin.id) as ErrorMessageEvaluationPlugin | undefined;
 
       if (result?.valid === false) {
+        const errorMessages = ErrorMessageEvaluationPlugin.from(result);
+
         const errors = result.errors;
-        for (const error of errors) {
+        errors.forEach((error) => {
           const pointer = decodeURIComponent(error.instanceLocation.slice(1));
           const node = jsonDocument.findNodeAtPointer(pointer);
 
@@ -30,11 +33,11 @@ export class SchemaValidationDiagnosticsProvider implements DiagnosticsProvider 
             schemaDiagnostics.push({
               severity: DiagnosticSeverity.Error,
               range: jsonDocument.rangeAt(node.offset, node.offset + node.length),
-              message: formatError(error, errorMessagePlugin),
+              message: formatError(error, errorMessages),
               source: "hyperjump-json-language-server"
             });
           }
-        }
+        });
       }
     } catch (error: unknown) {
       const schemaNode = jsonDocument.findNodeAtPointer("/$schema");
@@ -70,14 +73,13 @@ const formatLines = (error: ErrorObject, parentLocation: string, plugin?: ErrorM
   } else {
     // Multiple alternatives are options. Number them so it's clear where each
     // option starts and ends.
-    for (let index = 0; index < alternatives.length; index++) {
+    alternatives.forEach((alternative, index) => {
       const marker = `  ${index + 1}. `;
-      const alternative = alternatives[index];
-      for (let subErrorIndex = 0; subErrorIndex < alternative.length; subErrorIndex++) {
+      alternative.forEach((subError, subErrorIndex) => {
         const firstPrefix = subErrorIndex === 0 ? marker : " ".repeat(marker.length);
-        lines.push(...indent(formatLines(alternative[subErrorIndex], error.instanceLocation, plugin), firstPrefix));
-      }
-    }
+        lines.push(...indent(formatLines(subError, error.instanceLocation, plugin), firstPrefix));
+      });
+    });
   }
 
   return lines;

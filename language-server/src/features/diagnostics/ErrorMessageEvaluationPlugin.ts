@@ -1,5 +1,6 @@
 import type { EvaluationPlugin, ValidationContext } from "@hyperjump/json-schema/experimental";
 import type { JsonNode } from "@hyperjump/json-schema/instance/experimental";
+import type { SchemaEvaluation } from "../../services/JsonSchema.ts";
 
 const supportedErrorMessageKeywords = new Set([
   "https://json-schema.org/keyword/type",
@@ -22,6 +23,15 @@ export class ErrorMessageEvaluationPlugin implements EvaluationPlugin {
   static readonly id = "error-message";
 
   private messages: Map<string, string> = new Map();
+
+  // The plugin is registered once, in SchemaValidationDiagnosticsProvider.ts
+  static from(result: SchemaEvaluation): ErrorMessageEvaluationPlugin {
+    const plugin = result.plugins.get(ErrorMessageEvaluationPlugin.id);
+    if (!plugin) {
+      throw Error(`The ${ErrorMessageEvaluationPlugin.id} evaluation plugin isn't registered`);
+    }
+    return plugin as ErrorMessageEvaluationPlugin;
+  }
 
   beforeSchema(url: string, _instance: JsonNode, context: ValidationContext): void {
     const nodes = context.ast[url];
