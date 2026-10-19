@@ -1657,6 +1657,59 @@ describe("Schema Validation", () => {
   });
 });
 
+describe("errorMessage", () => {
+  let client: TestClient;
+
+  beforeEach(async () => {
+    client = new TestClient();
+    await client.start();
+  });
+
+  afterEach(async () => {
+    await client.stop();
+  });
+
+  test("errorMessage replaces the explanation of not", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "not": { "type": "string" }, "errorMessage": "Foo can't be a string" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": "a"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo can't be a string" })
+    ]);
+  });
+
+  test("errorMessage replaces the explanation of contains", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "contains": { "type": "string" }, "errorMessage": "Foo needs a string" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": [1, 2]
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo needs a string" })
+    ]);
+  });
+});
+
 describe("Workspace scan", async () => {
   let client: TestClient | undefined;
 

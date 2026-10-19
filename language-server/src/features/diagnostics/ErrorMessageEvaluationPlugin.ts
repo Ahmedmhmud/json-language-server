@@ -100,6 +100,7 @@ const getMessage = (keywordNodes: Node<unknown>[], keyword: string): string | un
 // errorMessage.
 const patternErrorMessageKeywords = new Set([
   "https://json-schema.org/keyword/pattern",
+  "https://json-schema.org/keyword/format",
   "https://json-schema.org/keyword/draft-04/format",
   "https://json-schema.org/keyword/draft-06/format",
   "https://json-schema.org/keyword/draft-07/format",
@@ -110,9 +111,13 @@ const patternErrorMessageKeywords = new Set([
 ]);
 
 // The other keywords VS Code uses errorMessage for. Keywords like required,
-// minLength, and maximum always use their own message.
+// minLength, and maximum always use their own message. minContains and
+// maxContains are evaluated by contains.
 const errorMessageKeywords = new Set([
   "https://json-schema.org/keyword/type",
   "https://json-schema.org/keyword/enum",
-  "https://json-schema.org/keyword/const"
+  "https://json-schema.org/keyword/const",
+  "https://json-schema.org/keyword/not",
+  "https://json-schema.org/keyword/contains",
+  "https://json-schema.org/keyword/draft-06/contains"
 ]);
