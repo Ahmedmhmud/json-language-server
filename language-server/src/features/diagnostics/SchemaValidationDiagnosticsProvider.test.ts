@@ -1283,378 +1283,6 @@ describe("Schema Validation", () => {
 
     await expect(diagnostics).resolves.toHaveLength(1);
   });
-
-  test("errorMessage overrides a type failure", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "errorMessage": "Must be a string"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": 42
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be a string" })
-    ]);
-  });
-
-  test("errorMessage does not override an unrelated keyword failure on the same subschema", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "minLength": 5,
-          "errorMessage": "Must be text"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "abc"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Expected a string with at least 5 characters" })
-    ]);
-  });
-
-  test("patternErrorMessage overrides a pattern failure", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "pattern": "^[a-z]+$",
-          "errorMessage": "Should not be used",
-          "patternErrorMessage": "Must be lowercase letters only"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be lowercase letters only" })
-    ]);
-  });
-
-  test("pattern failures fall back to errorMessage when patternErrorMessage is absent", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "pattern": "^[a-z]+$",
-          "errorMessage": "Must be lowercase letters only"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be lowercase letters only" })
-    ]);
-  });
-
-  test("ignores a non-string errorMessage value", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "errorMessage": { "type": "Must be a string" }
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": 42
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Expected a string" })
-    ]);
-  });
-
-  test("errorMessage overrides an enum failure", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "enum": ["red", "green", "blue"],
-          "errorMessage": "Must be a valid color"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "purple"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be a valid color" })
-    ]);
-  });
-
-  test("patternErrorMessage overrides a format failure", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": "string",
-          "format": "email",
-          "patternErrorMessage": "Must be a valid email address"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "not-an-email"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be a valid email address" })
-    ]);
-  });
-
-  test("errorMessage overrides the default message", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "username": {
-          "type": "string",
-          "pattern": "^[a-z]+$",
-          "errorMessage": "Must be lowercase letters only"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "username": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be lowercase letters only" })
-    ]);
-  });
-
-  test("falls back to the default message when no errorMessage is defined", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "username": {
-          "type": "string",
-          "pattern": "^[a-z]+$"
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "username": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Expected a string matching the regular expression /^[a-z]+$/" })
-    ]);
-  });
-
-  test("errorMessage of a schema that passed isn't used to explain a not failure", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "not": {
-            "type": "string",
-            "errorMessage": "Must not be a string"
-          }
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "hello"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({
-        message: "Expected the following to be true:\n  - The value is not a string"
-      })
-    ]);
-  });
-
-  test("each branch of multiple alternatives can have its own errorMessage", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "oneOf": [
-            { "type": "string", "errorMessage": "Must be a string" },
-            { "type": "number", "errorMessage": "Must be a number" }
-          ]
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": true
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({
-        message: "Expected the value to satisfy exactly one of the following options:\n  1. Must be a string\n  2. Must be a number"
-      })
-    ]);
-  });
-
-  test("errorMessage override resolves through a $ref", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$defs": {
-        "username": {
-          "type": "string",
-          "pattern": "^[a-z]+$",
-          "errorMessage": "Must be lowercase letters only"
-        }
-      },
-      "type": "object",
-      "properties": {
-        "username": { "$ref": "#/$defs/username" }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "username": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be lowercase letters only" })
-    ]);
-  });
-
-  test("errorMessage override applies inside nested alternatives", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "type": "object",
-      "properties": {
-        "value": {
-          "anyOf": [
-            { "type": "string", "errorMessage": "Must be a string" },
-            {
-              "type": "object",
-              "properties": {
-                "foo": {
-                  "anyOf": [
-                    { "type": "number", "errorMessage": "foo must be a number" },
-                    { "type": "boolean", "errorMessage": "foo must be a boolean" }
-                  ]
-                }
-              }
-            }
-          ]
-        }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": { "foo": "not a number or boolean" }
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({
-        message: "Expected the value to satisfy at least one of the following options:\n  1. foo must be a number\n  2. foo must be a boolean"
-      })
-    ]);
-  });
-
-  test("resolveMessage checks each schemaLocation and uses the first one that has errorMessage", async () => {
-    fixtureSchemaUri = await client.writeDocument("schema.json", `{
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "$defs": {
-        "base": {
-          "type": "string",
-          "pattern": "^[a-z]+$",
-          "errorMessage": "Must be lowercase letters only"
-        }
-      },
-      "type": "object",
-      "properties": {
-        "value": { "allOf": [{ "$ref": "#/$defs/base" }] }
-      }
-    }`);
-
-    await client.writeDocument("instance.json", `{
-      "$schema": "${fixtureSchemaUri}",
-      "value": "Ahmed123"
-    }`);
-    const diagnostics = client.getDiagnostics("instance.json");
-    await client.openDocument("instance.json");
-
-    await expect(diagnostics).resolves.toEqual([
-      expect.objectContaining({ message: "Must be lowercase letters only" })
-    ]);
-  });
 });
 
 describe("errorMessage", () => {
@@ -1667,6 +1295,211 @@ describe("errorMessage", () => {
 
   afterEach(async () => {
     await client.stop();
+  });
+
+  test("errorMessage replaces the message of a keyword in the same schema", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "type": "string", "errorMessage": "Foo must be a string" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo must be a string" })
+    ]);
+  });
+
+  test("errorMessage doesn't replace the message of a keyword in another schema at the same location", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "string": { "type": "string", "errorMessage": "Expected a string" }
+      },
+      "properties": {
+        "name": {
+          "allOf": [
+            { "$ref": "#/$defs/string" },
+            { "pattern": "^[a-z0-9-]+$" }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "name": "My Package"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string matching the regular expression /^[a-z0-9-]+$/" })
+    ]);
+  });
+
+  test("errorMessage doesn't replace the message of a keyword in a referenced schema", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "string": { "type": "string" }
+      },
+      "properties": {
+        "foo": { "$ref": "#/$defs/string", "errorMessage": "Not this message" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string" })
+    ]);
+  });
+
+  test("errorMessage doesn't replace the message of keywords VS Code doesn't use it for", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "minLength": 3, "errorMessage": "Not this message" }
+      },
+      "required": ["bar"],
+      "errorMessage": "Not this message either"
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": "a"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string with at least 3 characters" }),
+      expect.objectContaining({ message: "Missing required property: bar" })
+    ]);
+  });
+
+  test("patternErrorMessage replaces the message of pattern", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": {
+          "pattern": "^[a-z]+$",
+          "patternErrorMessage": "Foo must be lowercase letters",
+          "errorMessage": "Not this message"
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": "ABC"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo must be lowercase letters" })
+    ]);
+  });
+
+  test("errorMessage replaces the message of pattern if there isn't a patternErrorMessage", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "pattern": "^[a-z]+$", "errorMessage": "Foo must be lowercase letters" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": "ABC"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo must be lowercase letters" })
+    ]);
+  });
+
+  test("patternErrorMessage doesn't replace the message of other keywords", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "type": "string", "patternErrorMessage": "Not this message" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string" })
+    ]);
+  });
+
+  test("errorMessage replaces the message of enum", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "value": {
+          "enum": ["red", "green", "blue"],
+          "errorMessage": "Must be a valid color"
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "value": "purple"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Must be a valid color" })
+    ]);
+  });
+
+  test("patternErrorMessage replaces the message of format", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "value": {
+          "type": "string",
+          "format": "email",
+          "patternErrorMessage": "Must be a valid email address"
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "value": "not-an-email"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Must be a valid email address" })
+    ]);
   });
 
   test("a false property schema uses the errorMessage of the schema with the property", async () => {
@@ -1810,6 +1643,54 @@ describe("errorMessage", () => {
     ]);
   });
 
+  test("errorMessage only replaces the message of a keyword at the location where it failed", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "string": { "type": "string", "errorMessage": "Expected a string" }
+      },
+      "properties": {
+        "foo": { "$ref": "#/$defs/string" },
+        "bar": { "not": { "$ref": "#/$defs/string" } }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42,
+      "bar": "a"
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string" }),
+      expect.objectContaining({ message: `Expected the following to be true:
+  - The value is not a string` })
+    ]);
+  });
+
+  test("patternErrorMessage replaces the message of a property name pattern", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "propertyNames": {
+        "pattern": "^[a-z$]+$",
+        "patternErrorMessage": "Property names must be lowercase letters"
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "Foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Property names must be lowercase letters" })
+    ]);
+  });
+
   test("errorMessage replaces the explanation of not", async () => {
     const schemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1847,6 +1728,156 @@ describe("errorMessage", () => {
 
     await expect(diagnostics).resolves.toEqual([
       expect.objectContaining({ message: "Foo needs a string" })
+    ]);
+  });
+
+  test("errorMessage in an alternative replaces only that alternative's message", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "size": {
+          "anyOf": [
+            { "enum": ["small", "medium", "large"], "errorMessage": "Expected small, medium, or large" },
+            { "type": "integer", "minimum": 1 }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "size": 0
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: `Expected the value to satisfy at least one of the following options:
+  1. Expected small, medium, or large
+  2. Expected a number greater than or equal to 1` })
+    ]);
+  });
+
+  test("each alternative can have its own errorMessage", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "value": {
+          "oneOf": [
+            { "type": "string", "errorMessage": "Must be a string" },
+            { "type": "number", "errorMessage": "Must be a number" }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "value": true
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({
+        message: "Expected the value to satisfy exactly one of the following options:\n  1. Must be a string\n  2. Must be a number"
+      })
+    ]);
+  });
+
+  test("errorMessage replaces messages in nested alternatives", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "value": {
+          "anyOf": [
+            { "type": "string", "errorMessage": "Must be a string" },
+            {
+              "type": "object",
+              "properties": {
+                "foo": {
+                  "anyOf": [
+                    { "type": "number", "errorMessage": "foo must be a number" },
+                    { "type": "boolean", "errorMessage": "foo must be a boolean" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "value": { "foo": "not a number or boolean" }
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({
+        message: "Expected the value to satisfy at least one of the following options:\n  1. foo must be a number\n  2. foo must be a boolean"
+      })
+    ]);
+  });
+
+  test("errorMessage isn't used if it isn't a string", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "type": "string", "errorMessage": 42 },
+        "bar": { "type": "string", "errorMessage": "" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42,
+      "bar": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Expected a string" }),
+      expect.objectContaining({ message: "Expected a string" })
+    ]);
+  });
+
+  test("errorMessage from a dialect that includes the vscode vocabulary", async () => {
+    await client.writeDocument("meta-schema.json", `{
+      "$id": "https://example.com/dialect/vscode",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$vocabulary": {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+        "https://json-schema.org/draft/2020-12/vocab/validation": true,
+        "https://microsoft.com/vocab/vscode": true
+      },
+      "$dynamicAnchor": "meta",
+      "allOf": [
+        { "$ref": "https://json-schema.org/draft/2020-12/schema" },
+        { "$ref": "https://microsoft.com/meta/vscode" }
+      ]
+    }`);
+
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://example.com/dialect/vscode",
+      "properties": {
+        "foo": { "type": "string", "errorMessage": "Foo must be a string" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo must be a string" })
     ]);
   });
 });
