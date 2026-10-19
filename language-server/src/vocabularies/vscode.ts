@@ -1,7 +1,6 @@
 import { registerSchema } from "@hyperjump/json-schema/draft-2020-12";
 import { addKeyword, defineVocabulary } from "@hyperjump/json-schema/experimental";
 import * as Browser from "@hyperjump/browser";
-import { defineKeyword } from "@hyperjump/json-schema-errors";
 
 // VS Code's custom keywords. Only active in dialects whose meta-schema includes this vocabulary.
 // Accessors for their annotations are in evaluation/VscodeAnnotation.ts.
@@ -35,16 +34,14 @@ addKeyword({
 
 addKeyword({
   id: "https://microsoft.com/keyword/errorMessage",
-  compile: (schema) => Browser.value(schema),
-  interpret: () => true,
-  annotation: (value: unknown) => value
+  compile: async (schema) => Browser.value(schema),
+  interpret: () => true
 });
 
 addKeyword({
   id: "https://microsoft.com/keyword/patternErrorMessage",
-  compile: (schema) => Browser.value(schema),
-  interpret: () => true,
-  annotation: (value: unknown) => value
+  compile: async (schema) => Browser.value(schema),
+  interpret: () => true
 });
 
 defineVocabulary("https://microsoft.com/vocab/vscode", {
@@ -81,10 +78,3 @@ registerSchema({
     patternErrorMessage: { type: "string" }
   }
 });
-
-defineKeyword("https://microsoft.com/keyword/markdownDescription", { annotation: true });
-defineKeyword("https://microsoft.com/keyword/defaultSnippets", { annotation: true });
-defineKeyword("https://microsoft.com/keyword/deprecationMessage", { annotation: true });
-defineKeyword("https://microsoft.com/keyword/markdownDeprecationMessage", { annotation: true });
-defineKeyword("https://microsoft.com/keyword/errorMessage", { annotation: true });
-defineKeyword("https://microsoft.com/keyword/patternErrorMessage", { annotation: true });
