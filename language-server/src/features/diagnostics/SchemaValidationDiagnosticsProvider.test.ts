@@ -1506,7 +1506,7 @@ describe("Schema Validation", () => {
     ]);
   });
 
-  test("errorMessage overrides the message of a single-alternative error", async () => {
+  test("errorMessage of a schema that passed isn't used to explain a not failure", async () => {
     fixtureSchemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -1529,7 +1529,7 @@ describe("Schema Validation", () => {
 
     await expect(diagnostics).resolves.toEqual([
       expect.objectContaining({
-        message: "Expected the following to be true:\n  - Must not be a string"
+        message: "Expected the following to be true:\n  - The value is not a string"
       })
     ]);
   });
