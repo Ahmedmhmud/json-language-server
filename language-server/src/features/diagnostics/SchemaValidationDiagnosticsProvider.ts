@@ -54,21 +54,27 @@ export class SchemaValidationDiagnosticsProvider implements DiagnosticsProvider 
   }
 }
 
-export const formatError = (error: ErrorObject, plugin?: ErrorMessageEvaluationPlugin): string => {
-  return formatLines(error, error.instanceLocation, plugin).join("\n");
+export const formatError = (error: ErrorObject, errorMessages?: ErrorMessageEvaluationPlugin): string => {
+  return formatLines(error, error.instanceLocation, errorMessages).join("\n");
 };
 
-const formatLines = (error: ErrorObject, parentLocation: string, plugin?: ErrorMessageEvaluationPlugin): string[] => {
+const formatLines = (error: ErrorObject, parentLocation: string, errorMessages?: ErrorMessageEvaluationPlugin): string[] => {
   const location = relativeLocation(parentLocation, error.instanceLocation);
-  const alternatives = error.alternatives ?? [];
-  const message = resolveMessage(error, plugin);
 
-  const lines = [`${location ? `${location}: ` : ""}${message}${alternatives.length > 0 ? ":" : ""}`];
+  // A schema's message replaces the error's explanation along with its message
+  const errorMessage = errorMessages?.getMessage(error);
+  if (errorMessage !== undefined) {
+    return [`${location ? `${location}: ` : ""}${errorMessage}`];
+  }
+
+  const alternatives = error.alternatives ?? [];
+
+  const lines = [`${location ? `${location}: ` : ""}${error.message}${alternatives.length > 0 ? ":" : ""}`];
 
   if (alternatives.length === 1) {
     // A single alternative is a list of things that all apply
     for (const subError of alternatives[0]) {
-      lines.push(...indent(formatLines(subError, error.instanceLocation, plugin), "  - "));
+      lines.push(...indent(formatLines(subError, error.instanceLocation, errorMessages), "  - "));
     }
   } else {
     // Multiple alternatives are options. Number them so it's clear where each
@@ -77,25 +83,13 @@ const formatLines = (error: ErrorObject, parentLocation: string, plugin?: ErrorM
       const marker = `  ${index + 1}. `;
       alternative.forEach((subError, subErrorIndex) => {
         const firstPrefix = subErrorIndex === 0 ? marker : " ".repeat(marker.length);
-        lines.push(...indent(formatLines(subError, error.instanceLocation, plugin), firstPrefix));
+        lines.push(...indent(formatLines(subError, error.instanceLocation, errorMessages), firstPrefix));
       });
     });
   }
 
   return lines;
 };
-
-function resolveMessage(error: ErrorObject, plugin?: ErrorMessageEvaluationPlugin): string {
-  if (plugin) {
-    for (const schemaLocation of error.schemaLocations) {
-      const message = plugin.getMessage(schemaLocation);
-      if (message) {
-        return message;
-      }
-    }
-  }
-  return error.message;
-}
 
 const indent = ([first, ...rest]: string[], firstPrefix: string): string[] => {
   const restPrefix = " ".repeat(firstPrefix.length);
