@@ -1669,6 +1669,147 @@ describe("errorMessage", () => {
     await client.stop();
   });
 
+  test("a false property schema uses the errorMessage of the schema with the property", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "$schema": true,
+        "foo": false
+      },
+      "additionalProperties": false,
+      "errorMessage": "Only bar is allowed"
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42,
+      "baz": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Only bar is allowed" }),
+      expect.objectContaining({ message: "Only bar is allowed" })
+    ]);
+  });
+
+  test("a false item schema uses the errorMessage of the schema with the items", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": {
+          "prefixItems": [true, false],
+          "items": false,
+          "errorMessage": "Foo can only have one item"
+        }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": [1, 2, 3]
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo can only have one item" }),
+      expect.objectContaining({ message: "Foo can only have one item" })
+    ]);
+  });
+
+  test("a false schema in an in-place applicator uses the errorMessage of the schema with the applicator", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "allOf": [false], "errorMessage": "Foo isn't allowed" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo isn't allowed" })
+    ]);
+  });
+
+  test("a false schema uses the errorMessage of the nearest schema it's in", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "foo": { "items": false }
+      },
+      "errorMessage": "Not this message"
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": [1]
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "A value is not allowed here" })
+    ]);
+  });
+
+  test("a referenced false schema uses the errorMessage of the schema that references it", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "never": false
+      },
+      "properties": {
+        "foo": { "$ref": "#/$defs/never", "errorMessage": "Foo isn't allowed" }
+      },
+      "errorMessage": "Not this message"
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo isn't allowed" })
+    ]);
+  });
+
+  test("a referenced false schema only uses the errorMessage of the schema that references it at that location", async () => {
+    const schemaUri = await client.writeDocument("schema.json", `{
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "never": false
+      },
+      "properties": {
+        "foo": { "$ref": "#/$defs/never", "errorMessage": "Foo isn't allowed" },
+        "bar": { "$ref": "#/$defs/never" }
+      }
+    }`);
+
+    await client.writeDocument("instance.json", `{
+      "$schema": "${schemaUri}",
+      "foo": 42,
+      "bar": 42
+    }`);
+    const diagnostics = client.getDiagnostics("instance.json");
+    await client.openDocument("instance.json");
+
+    await expect(diagnostics).resolves.toEqual([
+      expect.objectContaining({ message: "Foo isn't allowed" }),
+      expect.objectContaining({ message: "A value is not allowed here" })
+    ]);
+  });
+
   test("errorMessage replaces the explanation of not", async () => {
     const schemaUri = await client.writeDocument("schema.json", `{
       "$schema": "https://json-schema.org/draft/2020-12/schema",

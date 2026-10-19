@@ -8,6 +8,8 @@ import type { SchemaEvaluation } from "../../services/JsonSchema.ts";
 type ErrorMessageContext = ValidationContext & {
   // The schema being evaluated
   schemaUri?: string;
+  // The schema whose keyword is being evaluated
+  parentSchemaUri?: string;
 };
 
 // VS Code's errorMessage and patternErrorMessage keywords replace the messages
@@ -38,11 +40,28 @@ export class ErrorMessageEvaluationPlugin implements EvaluationPlugin<ErrorMessa
     context.schemaUri = url;
   }
 
+  // Subschemas are evaluated with their keyword's context
+  beforeKeyword(_keywordNode: Node<unknown>, _instance: JsonNode, context: ErrorMessageContext, schemaContext: ErrorMessageContext): void {
+    context.parentSchemaUri = schemaContext.schemaUri;
+  }
+
   afterKeyword([keywordUri, keywordLocation]: Node<unknown>, instance: JsonNode, context: ErrorMessageContext, valid: boolean, schemaContext: ErrorMessageContext): void {
     if (!valid) {
       const message = keywordMessage(keywordUri, context.ast[schemaContext.schemaUri!] as Node<unknown>[]);
       if (message) {
         this.addMessage(instance, keywordLocation, message);
+      }
+    }
+  }
+
+  // A false schema fails at its own location rather than a keyword's. It can't
+  // have a message of its own, so it uses the message of the schema that
+  // applied it.
+  afterSchema(url: string, instance: JsonNode, context: ErrorMessageContext): void {
+    if (context.ast[url] === false && context.parentSchemaUri) {
+      const message = getMessage(context.ast[context.parentSchemaUri] as Node<unknown>[], "errorMessage");
+      if (message) {
+        this.addMessage(instance, url, message);
       }
     }
   }
