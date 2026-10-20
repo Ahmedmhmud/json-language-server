@@ -1388,4 +1388,166 @@ describe("Property completions", () => {
       ]);
     });
   });
+
+  describe("doNotSuggest", () => {
+    beforeEach(async () => {
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "value": {
+            "properties": {
+              "name": { "type": "string", "doNotSuggest": true },
+              "age": { "type": "integer", "doNotSuggest": false },
+              "fullName": { "type": "string" }
+            }
+          }
+        }
+      }`);
+
+      await client.writeDocument("instance.json", `{
+        "$schema": "${fixtureSchemaUri}",
+        "value": {
+          ""
+        }
+      }`);
+    });
+
+    test("a property with doNotSuggest isn't suggested", async () => {
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([
+        { label: "age" },
+        { label: "fullName" }
+      ]);
+    });
+
+    test("a property doNotSuggest through $ref or allOf isn't suggested", async () => {
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "value": {
+            "properties": {
+              "foo": { "$ref": "#/$defs/hidden" },
+              "bar": { "allOf": [{ "$ref": "#/$defs/hidden" }] },
+              "baz": { "type": "string" }
+            }
+          }
+        },
+        "$defs": {
+          "hidden": { "doNotSuggest": true }
+        }
+      }`);
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([
+        { label: "baz" }
+      ]);
+    });
+
+    test("a property with doNotSuggest in an anyOf alternative is still suggested", async () => {
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "value": {
+            "properties": {
+              "name": {
+                "anyOf": [
+                  { "doNotSuggest": true },
+                  { "type": "string" }
+                ]
+              }
+            }
+          }
+        }
+      }`);
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([
+        { label: "name" }
+      ]);
+    });
+
+    test("a property is still suggested when doNotSuggest isn't a boolean", async () => {
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "value": {
+            "properties": {
+              "name": { "type": "string", "doNotSuggest": "yes" }
+            }
+          }
+        }
+      }`);
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([
+        { label: "name" }
+      ]);
+    });
+
+    test("doNotSuggest from a dialect that includes the vscode vocabulary", async () => {
+      await client.writeDocument("meta-schema.json", `{
+        "$id": "https://example.com/dialect/vscode",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$vocabulary": {
+          "https://json-schema.org/draft/2020-12/vocab/core": true,
+          "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+          "https://json-schema.org/draft/2020-12/vocab/validation": true,
+          "https://microsoft.com/vocab/vscode": true
+        },
+        "$dynamicAnchor": "meta",
+        "allOf": [
+          { "$ref": "https://json-schema.org/draft/2020-12/schema" },
+          { "$ref": "https://microsoft.com/meta/vscode" }
+        ]
+      }`);
+
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://example.com/dialect/vscode",
+        "type": "object",
+        "properties": {
+          "value": {
+            "properties": {
+              "name": { "type": "string", "doNotSuggest": true },
+              "age": { "type": "integer" }
+            }
+          }
+        }
+      }`);
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([
+        { label: "age" }
+      ]);
+    });
+  });
 });

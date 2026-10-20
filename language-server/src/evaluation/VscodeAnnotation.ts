@@ -60,4 +60,9 @@ export const VscodeAnnotation = <T extends Constructor<Extended>>(Base: T) => cl
       ?? this.unknownKeyword("defaultSnippets", `${metaSchemaUri}#/properties/defaultSnippets`, ast)
       ?? []) as DefaultSnippet[];
   }
+
+  doNotSuggest(): boolean {
+    return ((this.keywords["https://microsoft.com/keyword/doNotSuggest"]
+      ?? this.unknownKeyword("doNotSuggest", `${metaSchemaUri}#/properties/doNotSuggest`, ast)) === true);
+  }
 };

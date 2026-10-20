@@ -44,13 +44,21 @@ addKeyword({
   interpret: () => true
 });
 
+addKeyword({
+  id: "https://microsoft.com/keyword/doNotSuggest",
+  compile: (schema) => Browser.value(schema),
+  interpret: () => true,
+  annotation: (value: unknown) => value
+});
+
 defineVocabulary("https://microsoft.com/vocab/vscode", {
   markdownDescription: "https://microsoft.com/keyword/markdownDescription",
   defaultSnippets: "https://microsoft.com/keyword/defaultSnippets",
   deprecationMessage: "https://microsoft.com/keyword/deprecationMessage",
   markdownDeprecationMessage: "https://microsoft.com/keyword/markdownDeprecationMessage",
   errorMessage: "https://microsoft.com/keyword/errorMessage",
-  patternErrorMessage: "https://microsoft.com/keyword/patternErrorMessage"
+  patternErrorMessage: "https://microsoft.com/keyword/patternErrorMessage",
+  doNotSuggest: "https://microsoft.com/keyword/doNotSuggest"
 });
 
 registerSchema({
@@ -75,6 +83,7 @@ registerSchema({
     deprecationMessage: { type: "string" },
     markdownDeprecationMessage: { type: "string" },
     errorMessage: { type: "string" },
-    patternErrorMessage: { type: "string" }
+    patternErrorMessage: { type: "string" },
+    doNotSuggest: { type: "boolean" }
   }
 });

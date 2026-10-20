@@ -126,6 +126,10 @@ export const tagDeprecated = (completionItem: CompletionItem, annotations: Annot
   }
 };
 
+export const hasDoNotSuggest = (annotations: Annotation[]) => {
+  return annotations.some((annotation) => annotation.doNotSuggest());
+};
+
 // The deprecation messages of every annotation that deprecates a completion.
 // Markdown if any of them is markdown, otherwise plain text. Plain text
 // messages are escaped when they're combined with markdown ones.
