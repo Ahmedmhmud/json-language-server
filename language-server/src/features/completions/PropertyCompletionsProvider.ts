@@ -2,7 +2,7 @@ import { CompletionItemKind } from "vscode-languageserver";
 import * as JsonPointer from "@hyperjump/json-pointer";
 import * as Pact from "@hyperjump/pact";
 import { LspEvaluationPlugin } from "../../evaluation/LspEvaluationPlugin.ts";
-import { tagDeprecated, hasDoNotSuggest } from "./Completions.ts";
+import { tagDeprecated } from "./Completions.ts";
 
 import type { CompletionItem } from "vscode-languageserver";
 import type { CompletionContext, CompletionsProvider } from "./Completions.ts";
@@ -50,7 +50,7 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
         // Annotations from the parent's anyOf/oneOf alternatives are location
         // annotations here, so one alternative's doNotSuggest hides the
         // property until a discriminant rules that alternative out
-        if (hasDoNotSuggest(annotations)) {
+        if (annotations.some((annotation) => annotation.doNotSuggest())) {
           continue;
         }
 
