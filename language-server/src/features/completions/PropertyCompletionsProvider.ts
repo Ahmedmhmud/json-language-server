@@ -47,6 +47,9 @@ export class PropertyCompletionsProvider implements CompletionsProvider {
 
         const propertyLocation = JsonPointer.append(propertyName, instanceLocation);
         const annotations = plugin.getLocationAnnotations(propertyLocation);
+        // Annotations from the parent's anyOf/oneOf alternatives are location
+        // annotations here, so one alternative's doNotSuggest hides the
+        // property until a discriminant rules that alternative out
         if (hasDoNotSuggest(annotations)) {
           continue;
         }

@@ -1549,5 +1549,108 @@ describe("Property completions", () => {
         { label: "age" }
       ]);
     });
+
+    test("a property with doNotSuggest in every anyOf alternative isn't suggested", async () => {
+      fixtureSchemaUri = await client.writeDocument("schema.json", `{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "properties": {
+                  "name": { "doNotSuggest": true }
+                }
+              },
+              {
+                "properties": {
+                  "name": { "doNotSuggest": true }
+                }
+              }
+            ]
+          }
+        }
+      }`);
+      const uri = await client.openDocument("instance.json");
+
+      const completions = await client.sendRequest(CompletionRequest.type, {
+        textDocument: { uri },
+        position: { line: 3, character: 11 }
+      }) as CompletionItem[];
+
+      expect(completions).toMatchObject([]);
+    });
+
+    describe("oneOf alternatives", () => {
+      beforeEach(async () => {
+        fixtureSchemaUri = await client.writeDocument("schema.json", `{
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "value": {
+              "oneOf": [
+                {
+                  "properties": {
+                    "kind": { "const": "cat" },
+                    "name": { "doNotSuggest": true },
+                    "meow": true
+                  },
+                  "required": ["kind"]
+                },
+                {
+                  "properties": {
+                    "kind": { "const": "dog" },
+                    "name": { "type": "string" },
+                    "bark": true
+                  },
+                  "required": ["kind"]
+                }
+              ]
+            }
+          }
+        }`);
+      });
+
+      test("a property is suggested once the discriminant selects an alternative without doNotSuggest", async () => {
+        await client.writeDocument("instance.json", `{
+          "$schema": "${fixtureSchemaUri}",
+          "value": {
+            "kind": "dog",
+            ""
+          }
+        }`);
+        const uri = await client.openDocument("instance.json");
+
+        const completions = await client.sendRequest(CompletionRequest.type, {
+          textDocument: { uri },
+          position: { line: 4, character: 13 }
+        }) as CompletionItem[];
+
+        expect(completions).toMatchObject([
+          { label: "name" },
+          { label: "bark" }
+        ]);
+      });
+
+      test("a property isn't suggested once the discriminant selects an alternative with doNotSuggest", async () => {
+        await client.writeDocument("instance.json", `{
+          "$schema": "${fixtureSchemaUri}",
+          "value": {
+            "kind": "cat",
+            ""
+          }
+        }`);
+        const uri = await client.openDocument("instance.json");
+
+        const completions = await client.sendRequest(CompletionRequest.type, {
+          textDocument: { uri },
+          position: { line: 4, character: 13 }
+        }) as CompletionItem[];
+
+        expect(completions).toMatchObject([
+          { label: "meow" }
+        ]);
+      });
+    });
   });
 });
